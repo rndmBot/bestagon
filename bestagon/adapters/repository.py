@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 
 class EventSourcedRepository(ABC):
+    # TODO - IDEA - stream name {Context}.{Application}.{Aggregate}-{ID}
+
     def __init__(self, event_store: EventStore, stream_name_prefix: str):
         self._event_store = event_store
         self._stream_name_prefix = stream_name_prefix
