@@ -1,36 +1,38 @@
+import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from dataclasses import dataclass
 from itertools import pairwise
-from typing import List, Dict
+from typing import List, Dict, Optional
 
-from kurrentdbclient import KurrentDBClient, StreamState, NewEvent
-
-from bestagon.exceptions import IntegrityError
-from bestagon.adapters.stored_event import StoredEvent
-
-# TODO - Event Store should provide subscription mechanism
+from bestagon.exceptions import IntegrityError, InvalidPositionError
 
 
-# @dataclass(frozen=True)
-# class CheckpointName:
-#     leader: str
-#     follower: str
-#     separator: str = '|->|'
-#
-#     def __eq__(self, other):
-#         if isinstance(other, CheckpointName):
-#             return self.name == other.name
-#         return NotImplemented
-#
-#     def __hash__(self):
-#         return hash(self.name)
-#
-#     def __str__(self):
-#         return self.name
-#
-#     @property
-#     def name(self) -> str:
-#         return f'{self.leader}{self.separator}{self.follower}'
+@dataclass(frozen=True)
+class StoredEvent:
+    """Event to be saved in and retreived from EventStore"""
+    stream_name: str
+    stream_position: int  # Position in aggreate sequence
+    commit_position: Optional[int]  # Position in application sequence
+    event_type: str
+    payload: bytes
+    metadata: bytes
+
+    def __eq__(self, other):
+        if isinstance(other, StoredEvent):
+            eq = all(
+                [
+                    self.stream_name == other.stream_name,
+                    self.stream_position == other.stream_position
+                ]
+            )
+            return eq
+        return NotImplemented
+
+    def __lt__(self, other):
+        if isinstance(other, StoredEvent):
+            return self.stream_position < other.stream_position
+        return NotImplemented
 
 
 class EventStore(ABC):
@@ -39,6 +41,10 @@ class EventStore(ABC):
 
     @staticmethod
     def _check_events_gapless(events: List[StoredEvent]) -> None:
+        """
+        Events should have monotonicaly increasing stream position, ex: 0, 1, 2, 3
+        Any gaps or out of order events are not allowed.
+        """
         versions = [event.stream_position for event in events]
         diffs = [y - x for x, y in pairwise(versions)]
         gapless = all([True if d == 1 else False for d in diffs])
@@ -47,7 +53,7 @@ class EventStore(ABC):
 
     @staticmethod
     def _check_events_homogeneous(events: List[StoredEvent]) -> None:
-        """Homogeneous events are events from one aggregate_id"""
+        """Events from multiple streams are not allowed."""
         ids = set()
         for event in events:
             ids.add(event.stream_name)
@@ -56,14 +62,20 @@ class EventStore(ABC):
 
     @staticmethod
     def _check_events_unique(events: List[StoredEvent]) -> None:
+        """Events must be unique to be recorded in event store."""
         if len(set(events)) < len(events):
             raise IntegrityError('Events must be unique to record to event store.')
 
     @abstractmethod
     def append_events(self, stream_name: str, events: List[StoredEvent]) -> None:
+        """
+        Adds new events to specified event stream.
+        ACHTUNG - validate events before recording them into the event store.
+        """
         raise NotImplementedError
 
     def validate_events(self, events: List[StoredEvent]) -> None:
+        """Convenience class."""
         self._check_events_unique(events)
         self._check_events_gapless(events)
         self._check_events_homogeneous(events)
@@ -73,11 +85,18 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_events(self, stream_name: str) -> List[StoredEvent]:
+    def get_events(self, regex_list: List[str], start_position: int, limit: int) -> List[StoredEvent]:
+        """Allows to retreive events from specific streams specified by regex, strating from specific position."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_stream(self, stream_name: str) -> List[StoredEvent]:
+        """Returns all events from a single stream."""
         raise NotImplementedError
 
     @abstractmethod
     def stream_exists(self, stream_name: str) -> bool:
+        """Returns True if specified stream exists in event store."""
         raise NotImplementedError
 
 
@@ -123,13 +142,41 @@ class POPOEventStore(EventStore):
             self._events.append(event)
             self._streams[stream_name][event.stream_position] = commit_position
 
-    def get_events(self, stream_name: str) -> List[StoredEvent]:
+    def get_stream(self, stream_name: str) -> List[StoredEvent]:
         stream_data = self._streams.get(stream_name)
         if stream_data is None:
             return list()
 
         indexes = sorted(stream_data.values())
         events = [self._events[index] for index in indexes]
+        return events
+
+    def get_events(self, regex_list: List[str], start_position: int, limit: int) -> List[StoredEvent]:
+        if not regex_list:
+            indexes = range(len(self._events))
+        else:
+            streams = list()
+            indexes = list()
+
+            for stream_name in self._streams:
+                for regex in regex_list:
+                    if re.match(regex, stream_name):
+                        streams.append(stream_name)
+                        break
+
+            for stream_name in streams:
+                indexes.extend(list(self._streams[stream_name].values()))
+            indexes.sort()
+
+        if start_position not in indexes:
+            raise InvalidPositionError(f'Invalid start position: {start_position}')
+
+        events = list()
+        for i in indexes[start_position:]:
+            events.append(self._events[i])
+            if len(events) == limit:
+                break
+
         return events
 
     def stream_exists(self, stream_name: str) -> bool:
@@ -202,89 +249,3 @@ class POPOEventStore(EventStore):
 #                 name=name.name,
 #                 value=value
 #             )
-
-
-class KurrentDBEventStore(EventStore):
-    def __init__(self, client: KurrentDBClient):
-        self.client = client
-
-    def close(self) -> None:
-        self.client.close()
-
-    def append_events(self, stream_name: str, events: List[StoredEvent]) -> None:
-        self.validate_events(events)
-
-        # Check current version
-        current_version = self.client.get_current_version(stream_name=stream_name)
-        first_event = events[0]
-        if current_version == StreamState.NO_STREAM:
-            if first_event.stream_position != 0:
-                raise IntegrityError('Failed to append event to non existent stream, events position should start from 0')
-        elif first_event.stream_position <= current_version:
-            raise IntegrityError(f'Failed to append events - event with version {first_event.stream_position} already exists in database')
-
-        new_events = list()
-        for event in events:
-            new_event = NewEvent(
-                type=event.event_type,
-                data=event.payload,
-                metadata=event.metadata
-            )
-            new_events.append(new_event)
-
-        self.client.append_to_stream(
-            stream_name=stream_name,
-            current_version=current_version,
-            events=new_events
-        )
-
-    def get_events(self, stream_name: str) -> List[StoredEvent]:
-        recorded_events = self.client.get_stream(stream_name=stream_name)
-        stored_events = list()
-
-        for recorded_event in recorded_events:
-            stored_event = StoredEvent(
-                stream_name=recorded_event.stream_name,
-                stream_position=recorded_event.stream_position,
-                commit_position=recorded_event.commit_position,
-                event_type=recorded_event.type,
-                payload=recorded_event.data,
-                metadata=recorded_event.metadata
-            )
-            stored_events.append(stored_event)
-        return stored_events
-
-    def stream_exists(self, stream_name: str) -> bool:
-        current_version = self.client.get_current_version(stream_name=stream_name)
-        if current_version == StreamState.NO_STREAM:
-            return False
-        return True
-
-# def get_application_events(self, application_name: str, start: Union[int, None] = None, limit: int = 10, separator: str = '.') -> List[ApplicationEvent]:
-    #     regex = f'{application_name}.*'
-    #     recorded_events = self.client.read_all(
-    #         filter_include=[regex],
-    #         commit_position=start,
-    #         filter_by_stream_name=True,
-    #         limit=limit
-    #     )
-    #     stored_events = list()
-    #
-    #     # TODO - smells
-    #     try:
-    #         for recorded_event in recorded_events:
-    #             aggregate_id = recorded_event.stream_name.replace(f'{application_name}{separator}', '')
-    #             stored_event = ApplicationEvent(
-    #                 sequence_position=recorded_event.commit_position,
-    #                 aggregate_id=aggregate_id,
-    #                 aggregate_version=recorded_event.stream_position,
-    #                 event_type=recorded_event.type,
-    #                 payload=recorded_event.data,
-    #                 metadata=recorded_event.metadata
-    #             )
-    #             stored_events.append(stored_event)
-    #     except UnknownError:
-    #         # TODO - ACHTUNG - UnknownError can be raised in any other case, not only on invalid position
-    #         raise InvalidPositionError(f'Invalid start position {start}.')
-    #
-    #     return stored_events
