@@ -2,8 +2,7 @@ from typing import List
 
 from kurrentdbclient import KurrentDBClient, StreamState, NewEvent
 
-from bestagon.adapters.event_store import EventStore
-from bestagon.adapters.stored_event import StoredEvent
+from bestagon.core.event_store import EventStore, StoredEvent
 from bestagon.exceptions import IntegrityError
 
 

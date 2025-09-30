@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List
 
+from bestagon.core.event_converter import EventConverter
 from bestagon.domain.domain_event import DomainEvent
-from bestagon.adapters.event_store import EventStore, StoredEvent
+from bestagon.core.event_store import EventStore
 from bestagon.exceptions import AggregateNotFoundError
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class StreamName:
+class ConventionStreamName:
     """Convention for stream name {SystemName}.{ApplicationName}.{AggregateType}-{AggregateId}"""
     system_name: str
     application_name: str
@@ -19,7 +20,7 @@ class StreamName:
     aggregate_id: str
 
     def __eq__(self, other):
-        if isinstance(other, StreamName):
+        if isinstance(other, ConventionStreamName):
             return self.to_string() == other.to_string()
         return NotImplemented
 
@@ -40,7 +41,7 @@ class StreamName:
         return f'{self.system_name}.{self.application_name}.{self.aggregate_type}-{self.aggregate_id}'
 
     @classmethod
-    def from_string(cls, s: str) -> 'StreamName':
+    def from_string(cls, s: str) -> 'ConventionStreamName':
         names, aggregate_id = s.split('-')
         system_name, application_name, aggregate_type = names.split('.')
         obj = cls(
@@ -52,43 +53,68 @@ class StreamName:
         return obj
 
 
-class EventSourcedRepository(ABC):
-    def __init__(self, event_store: EventStore, system_name: str, application_name: str):
-        self._event_store = event_store
+class StreamNamePolicy(ABC):
+    @abstractmethod
+    def create_stream_name(self, aggregate_id: str) -> str:
+        raise NotImplementedError
+
+
+class ConventionStreamNamePolicy(StreamNamePolicy):
+    def __init__(self, system_name: str, application_name: str, aggregate_type: str):
         self._system_name = system_name
         self._application_name = application_name
+        self._aggregate_type = aggregate_type
+
+    @property
+    def aggregate_type(self) -> str:
+        return self._aggregate_type
 
     @property
     def application_name(self) -> str:
         return self._application_name
 
     @property
+    def system_name(self) -> str:
+        return self._system_name
+
+    def create_stream_name(self, aggregate_id: str) -> str:
+        stream_name = ConventionStreamName(
+            system_name=self.system_name,
+            application_name=self.application_name,
+            aggregate_type=self.aggregate_type,
+            aggregate_id=aggregate_id
+        )
+        return stream_name.to_string()
+
+
+class EventSourcedRepository(ABC):
+    def __init__(self, event_store: EventStore, stream_name_policy: StreamNamePolicy, event_converter: EventConverter):
+        self._event_store = event_store
+        self._stream_name_policy = stream_name_policy
+        self._event_converter = event_converter
+
+    @property
+    def event_converter(self) -> EventConverter:
+        return self._event_converter
+
+    @property
     def event_store(self) -> EventStore:
         return self._event_store
 
     @property
-    def system_name(self) -> str:
-        return self._system_name
-
-    @abstractmethod
-    def from_stored_event(self, stored_event: StoredEvent) -> DomainEvent:
-        raise NotImplementedError
+    def stream_name_policy(self) -> StreamNamePolicy:
+        return self._stream_name_policy
 
     def get_by_id(self, aggregate_id: str) -> 'Aggregate':
         domain_events: List[DomainEvent] = list()
-        stream_name = StreamName(
-            system_name=self.system_name,
-            application_name=self.application_name,
-            aggregate_type=self.aggregate_class.get_type(),
-            aggregate_id=aggregate_id
-        )
-        stored_events = self.event_store.get_stream(stream_name=stream_name.to_string())
+        stream_name = self.stream_name_policy.create_stream_name(aggregate_id=aggregate_id)
+        stored_events = self.event_store.get_stream(stream_name=stream_name)
 
         if not stored_events:
             raise AggregateNotFoundError(f'Aggregate {aggregate_id} not found.')
 
         for stored_event in stored_events:
-            domain_event = self.from_stored_event(stored_event=stored_event)
+            domain_event = self.event_converter.from_stored_event(stored_event=stored_event)
             domain_events.append(domain_event)
 
         aggregate = self.reconstruct_aggregate(events=domain_events)
@@ -104,18 +130,9 @@ class EventSourcedRepository(ABC):
 
         stored_events = list()
         for domain_event in aggregate.pending_events:
-            stored_event = self.to_stored_event(event=domain_event)
+            stored_event = self.event_converter.to_stored_event(domain_event=domain_event)
             stored_events.append(stored_event)
 
-        stream_name = StreamName(
-            system_name=self.system_name,
-            application_name=self.application_name,
-            aggregate_type=aggregate.get_type(),
-            aggregate_id=aggregate.id
-        )
-        self.event_store.append_events(stream_name=stream_name.to_string(), events=stored_events)
+        stream_name = self.stream_name_policy.create_stream_name(aggregate_id=aggregate.id)
+        self.event_store.append_events(stream_name=stream_name, events=stored_events)
         aggregate.clear_events()
-
-    @abstractmethod
-    def to_stored_event(self, event: DomainEvent) -> StoredEvent:
-        raise NotImplementedError
