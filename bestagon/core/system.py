@@ -1,12 +1,8 @@
-import logging
 from typing import Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.domain.application import Projection, Application, Follower
 from bestagon.exceptions import ApplicationError
-
-
-logger = logging.getLogger(__name__)
 
 
 class EventSourcedSystem:
