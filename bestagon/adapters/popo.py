@@ -3,7 +3,7 @@ from collections import defaultdict
 from typing import List, Dict, Union
 
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.event_store import EventStore, StoredEvent
+from bestagon.core.event_store import EventStore, StreamEvent
 from bestagon.exceptions import IntegrityError, InvalidPositionError
 
 
@@ -20,13 +20,13 @@ class POPOCheckpointStore(CheckpointStore):
 
 class POPOEventStore(EventStore):
     def __init__(self):
-        self._events: List[StoredEvent] = list()  # Application sequence
+        self._events: List[StreamEvent] = list()  # Application sequence
         self._streams: Dict[str, Dict[int, int]] = defaultdict(dict)  # Aggregate sequence {stream_name: {aggregate_version: position_in_application_sequence}}
 
     def close(self) -> None:
         pass
 
-    def append_events(self, stream_name: str, events: List[StoredEvent]) -> None:
+    def append_events(self, stream_name: str, events: List[StreamEvent]) -> None:
         self.validate_events(events)
 
         recorded_versions = self._streams.get(stream_name)
@@ -39,7 +39,7 @@ class POPOEventStore(EventStore):
 
         for event in events:
             commit_position = len(self._events)
-            event = StoredEvent(
+            event = StreamEvent(
                 stream_name=event.stream_name,
                 stream_position=event.stream_position,
                 commit_position=commit_position,
@@ -50,7 +50,7 @@ class POPOEventStore(EventStore):
             self._events.append(event)
             self._streams[stream_name][event.stream_position] = commit_position
 
-    def get_stream(self, stream_name: str) -> List[StoredEvent]:
+    def get_stream(self, stream_name: str) -> List[StreamEvent]:
         stream_data = self._streams.get(stream_name)
         if stream_data is None:
             return list()
@@ -59,7 +59,7 @@ class POPOEventStore(EventStore):
         events = [self._events[index] for index in indexes]
         return events
 
-    def get_events(self, regex_list: List[str], start_position: int, limit: int) -> List[StoredEvent]:
+    def get_events(self, regex_list: List[str], start_position: int, limit: int) -> List[StreamEvent]:
         if not regex_list:
             indexes = range(len(self._events))
         else:

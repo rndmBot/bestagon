@@ -2,7 +2,7 @@ from typing import List
 
 from kurrentdbclient import KurrentDBClient, StreamState, NewEvent
 
-from bestagon.core.event_store import EventStore, StoredEvent
+from bestagon.core.event_store import EventStore, StreamEvent
 from bestagon.exceptions import IntegrityError
 
 
@@ -13,7 +13,7 @@ class KurrentDBEventStore(EventStore):
     def close(self) -> None:
         self.client.close()
 
-    def append_events(self, stream_name: str, events: List[StoredEvent]) -> None:
+    def append_events(self, stream_name: str, events: List[StreamEvent]) -> None:
         self.validate_events(events)
 
         # Check current version
@@ -40,7 +40,7 @@ class KurrentDBEventStore(EventStore):
             events=new_events
         )
 
-    def get_events(self, regex_list: str, start_position: int, limit: int) -> List[StoredEvent]:
+    def get_events(self, regex_list: str, start_position: int, limit: int) -> List[StreamEvent]:
         recorded_events = self.client.read_all(
             commit_position=start_position,
             filter_include=regex_list,
@@ -50,7 +50,7 @@ class KurrentDBEventStore(EventStore):
 
         events = list()
         for recorded_event in recorded_events:
-            stored_event = StoredEvent(
+            stored_event = StreamEvent(
                 stream_name=recorded_event.stream_name,
                 stream_position=recorded_event.stream_position,
                 commit_position=recorded_event.commit_position,
@@ -61,12 +61,12 @@ class KurrentDBEventStore(EventStore):
             events.append(stored_event)
         return events
 
-    def get_stream(self, stream_name: str) -> List[StoredEvent]:
+    def get_stream(self, stream_name: str) -> List[StreamEvent]:
         recorded_events = self.client.get_stream(stream_name=stream_name)
         stored_events = list()
 
         for recorded_event in recorded_events:
-            stored_event = StoredEvent(
+            stored_event = StreamEvent(
                 stream_name=recorded_event.stream_name,
                 stream_position=recorded_event.stream_position,
                 commit_position=recorded_event.commit_position,

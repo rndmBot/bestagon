@@ -1,8 +1,8 @@
 import logging
 from typing import Tuple, Dict
 
-from bestagon.core.event_store import EventStore
-from bestagon.domain.application import Projection, Application
+from bestagon.core.checkpoint_store import CheckpointStore
+from bestagon.domain.application import Projection, Application, Follower
 from bestagon.exceptions import ApplicationError
 
 
@@ -11,21 +11,42 @@ logger = logging.getLogger(__name__)
 
 class EventSourcedSystem:
     # TODO - application graph
-    # TODO - execution policy
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, checkpoint_store: CheckpointStore):
         self._name = name
         self._applications: Dict[str, Application] = dict()
         self._projections: Dict[str, Projection] = dict()
+        self._checkpoint_store = checkpoint_store
 
     @property
     def applications(self) -> Tuple[Application, ...]:
         return tuple(self._applications.values())
 
     @property
+    def checkpoint_store(self) -> CheckpointStore:
+        return self._checkpoint_store
+
+    @property
     def projections(self) -> Tuple[Projection, ...]:
         return tuple(self._projections.values())
+
+    def _process_follower(self, follower: Follower) -> None:
+        for leader_name in follower.leaders:
+            leader = self.get_application(name=leader_name)
+            checkpoint_name = f'{follower.name}-FOLLOWS-{leader_name}'  # TODO - ORLY???
+
+            while True:
+                last_checkpoint = self.checkpoint_store.get_checkpoint(name=checkpoint_name)
+                events = leader.get_events(start_position=last_checkpoint, limit=100)  # TODO - make limit changeable
+                events.pop(0)  # First event already processed
+
+                if not events:
+                    break
+
+                for event, commit_postition in events:
+                    follower.process_event(event)
+                    self.checkpoint_store.set_checkpoint(name=checkpoint_name, value=commit_postition)
 
     def add_application(self, app: Application) -> None:
         if not isinstance(app, Application):
@@ -58,13 +79,14 @@ class EventSourcedSystem:
         return proj
 
     def process_application(self, name: str) -> None:
-        # TODO - zapili
-        raise NotImplementedError
+        app = self.get_application(name=name)
+        self._process_follower(follower=app)
 
     def process_projection(self, name: str) -> None:
-        # TODO - zapili
-        raise NotImplementedError
+        proj = self.get_projection(name=name)
+        self._process_follower(follower=proj)
 
     def rebuild_projection(self, name: str) -> None:
         # TODO - zapili
+        # TODO - should reset checkpoint
         raise NotImplementedError
