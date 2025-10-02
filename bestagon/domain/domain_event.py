@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 
 @dataclass(frozen=True)
 class DomainEventMetadata:
+    # TODO - add correlation_id
+    # TODO - add causation_id
     timestamp: str
     aggregate_id: str
     aggregate_version: int

@@ -61,7 +61,6 @@ class Application(Follower, Leader):
     def name(self) -> str:
         return self.application_name.to_string()
 
-    @abstractmethod
     def get_events(self, start_position: int, limit: int) -> List[Tuple[DomainEvent, int]]:
         """Returns two-tuple (DomainEvent, CommitPosition)"""
         # TODO - rethink return type

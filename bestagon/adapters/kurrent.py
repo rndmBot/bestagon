@@ -2,7 +2,7 @@ from typing import List
 
 from kurrentdbclient import KurrentDBClient, StreamState, NewEvent
 
-from bestagon.core.event_store import EventStore, StreamEvent
+from bestagon.core.event_store import EventStore, StreamEvent, NewStreamEvent
 from bestagon.exceptions import IntegrityError
 
 
@@ -13,8 +13,8 @@ class KurrentDBEventStore(EventStore):
     def close(self) -> None:
         self.client.close()
 
-    def append_events(self, stream_name: str, events: List[StreamEvent]) -> None:
-        self.validate_events(events)
+    def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
+        self.validate_new_events(events)
 
         # Check current version
         current_version = self.client.get_current_version(stream_name=stream_name)

@@ -72,7 +72,14 @@ class Aggregate(ABC):
         raise TypeError(f'Unknown Event {type(event)}')
 
     def clear_events(self) -> None:
+        """Clears all pending events on the Aggregate"""
         self._pending_events = list()
+
+    def collect_events(self) -> List[DomainEvent]:
+        """Returns the list of pending events in the aggregate and clears pending events"""
+        events = self._pending_events
+        self.clear_events()
+        return events
 
     @staticmethod
     @abstractmethod
@@ -83,6 +90,7 @@ class Aggregate(ABC):
     @abstractmethod
     def get_type() -> str:
         """Used for persistence in event store."""
+        # TODO - ORLY???
         raise NotImplementedError
 
     def mutate(self, event: DomainEvent) -> None:

@@ -1,9 +1,23 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import pairwise
-from typing import List, Optional
+from typing import List
 
 from bestagon.exceptions import IntegrityError
+
+
+@dataclass(frozen=True)
+class NewStreamEvent:
+    """New event to store in event store"""
+    stream_position: int  # Position in aggreate sequence
+    event_type: str
+    payload: bytes
+    metadata: bytes
+
+    def __eq__(self, other):
+        if isinstance(other, NewStreamEvent):
+            return self.stream_position == other.stream_position
+        return NotImplemented
 
 
 @dataclass(frozen=True)
@@ -11,7 +25,7 @@ class StreamEvent:
     """Event to be saved in and retreived from EventStore"""
     stream_name: str
     stream_position: int  # Position in aggreate sequence
-    commit_position: Optional[int]  # Position in application sequence
+    commit_position: int  # Position in application sequence
     event_type: str
     payload: bytes
     metadata: bytes
@@ -44,7 +58,7 @@ class EventStore(ABC):
         return self.stream_exists(stream_name=item)
 
     @staticmethod
-    def _check_events_gapless(events: List[StreamEvent]) -> None:
+    def _check_events_gapless(events: List[NewStreamEvent]) -> None:
         """
         Events should have monotonicaly increasing stream position, ex: 0, 1, 2, 3
         Any gaps or out of order events are not allowed.
@@ -56,33 +70,23 @@ class EventStore(ABC):
             raise IntegrityError('Events must be gapless to record in event store.')
 
     @staticmethod
-    def _check_events_homogeneous(events: List[StreamEvent]) -> None:
-        """Events from multiple streams are not allowed."""
-        ids = set()
-        for event in events:
-            ids.add(event.stream_name)
-            if len(ids) > 1:
-                raise IntegrityError('Record to multiple streams are not supported.')
-
-    @staticmethod
-    def _check_events_unique(events: List[StreamEvent]) -> None:
+    def _check_events_unique(events: List[NewStreamEvent]) -> None:
         """Events must be unique to be recorded in event store."""
         if len(set(events)) < len(events):
             raise IntegrityError('Events must be unique to record to event store.')
 
     @abstractmethod
-    def append_events(self, stream_name: str, events: List[StreamEvent]) -> None:
+    def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
         """
         Adds new events to specified event stream.
         ACHTUNG - validate events before recording them into the event store.
         """
         raise NotImplementedError
 
-    def validate_events(self, events: List[StreamEvent]) -> None:
+    def validate_new_events(self, events: List[NewStreamEvent]) -> None:
         """Convenience class."""
         self._check_events_unique(events)
         self._check_events_gapless(events)
-        self._check_events_homogeneous(events)
 
     @abstractmethod
     def close(self) -> None:

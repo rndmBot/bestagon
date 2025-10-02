@@ -3,7 +3,7 @@ from collections import defaultdict
 from typing import List, Dict, Union
 
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.event_store import EventStore, StreamEvent
+from bestagon.core.event_store import EventStore, StreamEvent, NewStreamEvent
 from bestagon.exceptions import IntegrityError, InvalidPositionError
 
 
@@ -26,8 +26,8 @@ class POPOEventStore(EventStore):
     def close(self) -> None:
         pass
 
-    def append_events(self, stream_name: str, events: List[StreamEvent]) -> None:
-        self.validate_events(events)
+    def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
+        self.validate_new_events(events)
 
         recorded_versions = self._streams.get(stream_name)
         recorded_versions = recorded_versions or list()
@@ -40,7 +40,7 @@ class POPOEventStore(EventStore):
         for event in events:
             commit_position = len(self._events)
             event = StreamEvent(
-                stream_name=event.stream_name,
+                stream_name=stream_name,
                 stream_position=event.stream_position,
                 commit_position=commit_position,
                 event_type=event.event_type,
