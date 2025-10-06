@@ -9,13 +9,16 @@ from bestagon.domain.domain_event import DomainEvent
 
 
 class Component(ABC):
-    @abstractmethod
     @property
     def name(self) -> str:
-        raise NotImplementedError
+        return self.get_name()
 
     @abstractmethod
     def process_event(self, event: DomainEvent) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_name(self) -> str:
         raise NotImplementedError
 
 
