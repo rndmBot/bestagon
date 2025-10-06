@@ -14,11 +14,6 @@ class NewStreamEvent:
     payload: bytes
     metadata: bytes
 
-    def __eq__(self, other):
-        if isinstance(other, NewStreamEvent):
-            return self.stream_position == other.stream_position
-        return NotImplemented
-
 
 @dataclass(frozen=True)
 class StreamEvent:
@@ -57,8 +52,16 @@ class EventStore(ABC):
     def __contains__(self, item):
         return self.stream_exists(stream_name=item)
 
+    @abstractmethod
+    def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
+        """
+        Adds new events to specified event stream.
+        ACHTUNG - validate events before recording them into the event store.
+        """
+        raise NotImplementedError
+
     @staticmethod
-    def _check_events_gapless(events: List[NewStreamEvent]) -> None:
+    def validate_new_events(events: List[NewStreamEvent]) -> None:
         """
         Events should have monotonicaly increasing stream position, ex: 0, 1, 2, 3
         Any gaps or out of order events are not allowed.
@@ -68,25 +71,6 @@ class EventStore(ABC):
         gapless = all([True if d == 1 else False for d in diffs])
         if not gapless:
             raise IntegrityError('Events must be gapless to record in event store.')
-
-    @staticmethod
-    def _check_events_unique(events: List[NewStreamEvent]) -> None:
-        """Events must be unique to be recorded in event store."""
-        if len(set(events)) < len(events):
-            raise IntegrityError('Events must be unique to record to event store.')
-
-    @abstractmethod
-    def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
-        """
-        Adds new events to specified event stream.
-        ACHTUNG - validate events before recording them into the event store.
-        """
-        raise NotImplementedError
-
-    def validate_new_events(self, events: List[NewStreamEvent]) -> None:
-        """Convenience class."""
-        self._check_events_unique(events)
-        self._check_events_gapless(events)
 
     @abstractmethod
     def close(self) -> None:

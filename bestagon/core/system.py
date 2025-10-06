@@ -24,6 +24,10 @@ class EventSourcedSystem:
         return self._checkpoint_store
 
     @property
+    def name(self) -> str:
+        return self._name
+
+    @property
     def projections(self) -> Tuple[Projection, ...]:
         return tuple(self._projections.values())
 

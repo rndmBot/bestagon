@@ -60,11 +60,11 @@ class EventSourcedRepository(ABC):
         if not aggregate.pending_events:
             return
 
-        stored_events = list()
+        new_stored_events = list()
         for domain_event in aggregate.pending_events:
-            stored_event = self.mapper.to_stream_event(domain_event=domain_event)
-            stored_events.append(stored_event)
+            new_stored_event = self.mapper.to_new_stream_event(domain_event=domain_event)
+            new_stored_events.append(new_stored_event)
 
         stream_name = self.stream_name_policy.create_stream_name(aggregate_id=aggregate.id)
-        self.event_store.append_events(stream_name=stream_name, events=stored_events)
+        self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
         aggregate.clear_events()

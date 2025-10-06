@@ -76,6 +76,7 @@ class Application(Follower, Leader):
 
 
 class Projection(Follower):
+    # TODO - name as an object (ProjectionName)
     # TODO - Projections should give a possibility to provide stats about how it is doing
     # TODO - Projection stats should be accessed through REST API http://localhost/projectionStats/CountByDocument
 
