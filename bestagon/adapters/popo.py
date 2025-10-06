@@ -1,6 +1,6 @@
 import re
 from collections import defaultdict
-from typing import List, Dict, Union
+from typing import List, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_store import EventStore, StreamEvent, NewStreamEvent
@@ -11,8 +11,8 @@ class POPOCheckpointStore(CheckpointStore):
     def __init__(self):
         self._store = dict()
 
-    def get_checkpoint(self, name: str) -> Union[int, None]:
-        return self._store.get(name, None)
+    def get_checkpoint(self, name: str) -> int:
+        return self._store.get(name, 0)
 
     def set_checkpoint(self, name: str, value: int) -> None:
         self._store[name] = value

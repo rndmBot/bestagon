@@ -1,5 +1,3 @@
-from typing import Union
-
 import neo4j
 
 from bestagon.core.checkpoint_store import CheckpointStore
@@ -29,7 +27,7 @@ class Neo4jCheckpointStore(CheckpointStore):
         with self.driver.session(database=self.database_name) as sess:
             sess.run(index_cypher)  # NOQA
 
-    def get_checkpoint(self, name: str) -> Union[int, None]:
+    def get_checkpoint(self, name: str) -> int:
         cypher = '''
         MATCH (c:Checkpoint {name: $name})
         RETURN c.value
@@ -43,6 +41,8 @@ class Neo4jCheckpointStore(CheckpointStore):
             data = result.single()
             if data is not None:
                 data = data.value()
+            else:
+                data = 0
 
         return data
 

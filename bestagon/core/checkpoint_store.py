@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Union
 
 
 class CheckpointStore(ABC):
     @abstractmethod
-    def get_checkpoint(self, name: str) -> Union[int, None]:
+    def get_checkpoint(self, name: str) -> int:
         raise NotImplementedError
 
     @abstractmethod
