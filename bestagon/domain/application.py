@@ -60,8 +60,7 @@ class Application(Follower, Leader):
     def mapper(self) -> Mapper:
         return self._mapper
 
-    @property
-    def name(self) -> str:
+    def get_name(self) -> str:
         return self.application_name.to_string()
 
     def get_events(self, start_position: int, limit: int) -> List[Tuple[DomainEvent, int]]:
@@ -92,11 +91,10 @@ class Projection(Follower):
             return self.name == other.name
         return NotImplemented
 
-    @property
-    def name(self) -> str:
-        return self._name
-
     @abstractmethod
     def drop(self) -> None:
         """There should be functionality to drop projection and rebuild it from scratch"""
         raise NotImplementedError
+
+    def get_name(self) -> str:
+        return self._name
