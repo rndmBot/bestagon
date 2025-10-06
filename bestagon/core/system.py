@@ -1,3 +1,5 @@
+import logging
+from abc import abstractmethod, ABC
 from typing import Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
@@ -5,7 +7,10 @@ from bestagon.domain.application import Projection, Application, Follower
 from bestagon.exceptions import ApplicationError
 
 
-class EventSourcedSystem:
+logger = logging.getLogger(__name__)
+
+
+class EventSourcedSystem(ABC):
     # TODO - application graph
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
 
@@ -32,13 +37,17 @@ class EventSourcedSystem:
         return tuple(self._projections.values())
 
     def _process_follower(self, follower: Follower) -> None:
+        if not follower.leaders:
+            return
+
+        logger.info(f'Processing follower - {follower.name}')
         for leader_name in follower.leaders:
             leader = self.get_application(name=leader_name)
-            checkpoint_name = f'{follower.name}-FOLLOWS-{leader_name}'  # TODO - ORLY???
+            checkpoint_name = self.create_checkpoint_name(follower_name=follower.name, leader_name=leader.name)
 
             while True:
                 last_checkpoint = self.checkpoint_store.get_checkpoint(name=checkpoint_name)
-                events = leader.get_events(start_position=last_checkpoint, limit=100)  # TODO - make limit changeable
+                events = leader.get_events(start_position=last_checkpoint, limit=1000)  # TODO - make limit changeable
                 events.pop(0)  # First event already processed
 
                 if not events:
@@ -66,6 +75,11 @@ class EventSourcedSystem:
 
         self._projections[projection.name] = projection
 
+    @abstractmethod
+    def create_checkpoint_name(self, follower_name: str, leader_name: str) -> str:
+        # TODO - ORLY??? Is it necessary to have this method and maybe it is responsibility of some other part of the system?
+        raise NotImplementedError
+
     def get_application(self, name: str) -> Application:
         app = self._applications.get(name)
         if app is None:
@@ -90,3 +104,11 @@ class EventSourcedSystem:
         # TODO - zapili
         # TODO - should reset checkpoint
         raise NotImplementedError
+
+    def start_processing(self) -> None:
+        # TODO - there should be another way to propagate events between applications
+        for application in self.applications:
+            self._process_follower(follower=application)
+
+        for projection in self.projections:
+            self._process_follower(follower=projection)
