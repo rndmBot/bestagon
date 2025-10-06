@@ -16,6 +16,9 @@ class EventSourcedRepository:
         self._stream_name_policy = stream_name_policy
         self._mapper = mapper
 
+    def __contains__(self, item):
+        return self.contains(item)
+
     @property
     def mapper(self) -> Mapper:
         return self._mapper
@@ -27,6 +30,10 @@ class EventSourcedRepository:
     @property
     def stream_name_policy(self) -> StreamNamePolicy:
         return self._stream_name_policy
+
+    def contains(self, aggregate_id) -> bool:
+        stream_id = self.stream_name_policy.create_stream_name(aggregate_id=aggregate_id)
+        return self.event_store.stream_exists(stream_name=stream_id)
 
     def get_by_id(self, aggregate_id: str) -> 'Aggregate':
         domain_events: List[DomainEvent] = list()
