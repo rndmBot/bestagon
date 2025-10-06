@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, List
 
 from bestagon.core.mapper import Mapper
@@ -11,7 +10,7 @@ if TYPE_CHECKING:
     from bestagon.domain.aggregate import Aggregate
 
 
-class EventSourcedRepository(ABC):
+class EventSourcedRepository:
     def __init__(self, event_store: EventStore, stream_name_policy: StreamNamePolicy, mapper: Mapper):
         self._event_store = event_store
         self._stream_name_policy = stream_name_policy
@@ -44,7 +43,6 @@ class EventSourcedRepository(ABC):
         aggregate = self.reconstruct_aggregate(events=domain_events)
         return aggregate
 
-    @abstractmethod
     def reconstruct_aggregate(self, events: List[DomainEvent]) -> 'Aggregate':
         created = events.pop(0)
         if not isinstance(created, Aggregate.Created):

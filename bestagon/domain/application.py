@@ -42,6 +42,7 @@ class Follower(Component):
 
 
 class Application(Follower, Leader):
+    # TODO - ACHTUNG - ambiguity detected - it has name and application name
     def __init__(self, application_name: ApplicationName, event_store: EventStore, mapper: Mapper):
         super().__init__()
         self._event_store = event_store
