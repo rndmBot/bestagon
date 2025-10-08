@@ -62,6 +62,7 @@ class EventSourcedRepository:
         return aggregate
 
     def save(self, aggregate: 'Aggregate') -> None:
+        # TODO - should track versions to ensure optimistic concurrency
         if not aggregate.pending_events:
             return
 

@@ -90,7 +90,6 @@ class Aggregate(ABC):
     @abstractmethod
     def get_type() -> str:
         """Used for persistence in event store."""
-        # TODO - ORLY???
         raise NotImplementedError
 
     def mutate(self, event: DomainEvent) -> None:

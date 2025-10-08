@@ -2,10 +2,14 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 
 
+# TODO - IDEA - add ExternalEvent class
+
+
 @dataclass(frozen=True)
 class DomainEventMetadata:
     # TODO - add correlation_id
     # TODO - add causation_id
+    # TODO - ORLY - inherit dict and use getters to get aggregate_id, version etc.
     timestamp: str
     aggregate_id: str
     aggregate_version: int
