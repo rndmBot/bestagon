@@ -1,13 +1,18 @@
+import logging
+from itertools import pairwise
 from typing import TYPE_CHECKING, List
 
 from bestagon.core.mapper import Mapper
 from bestagon.core.policy import StreamNamePolicy
 from bestagon.domain.domain_event import DomainEvent
 from bestagon.core.event_store import EventStore
-from bestagon.exceptions import AggregateNotFoundError
+from bestagon.exceptions import AggregateNotFoundError, IntegrityError
 
 if TYPE_CHECKING:
     from bestagon.domain.aggregate import Aggregate
+
+
+logger = logging.getLogger(__name__)
 
 
 class EventSourcedRepository:
@@ -62,9 +67,16 @@ class EventSourcedRepository:
         return aggregate
 
     def save(self, aggregate: 'Aggregate') -> None:
-        # TODO - should track versions to ensure optimistic concurrency
         if not aggregate.pending_events:
             return
+
+        # Events validation - aggregate version must be monotonically increasing
+        versions = [event.metadata.aggregate_version for event in aggregate.pending_events]
+        diffs = [y - x for x, y in pairwise(versions)]
+        gapless = all([True if d == 1 else False for d in diffs])
+        if not gapless:
+            logger.debug(f'{aggregate.id}: {versions}')
+            raise IntegrityError('Invalid aggregate version: each aggregate event should have version exactly one more than previous.')
 
         new_stored_events = list()
         for domain_event in aggregate.pending_events:

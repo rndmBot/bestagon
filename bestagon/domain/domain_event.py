@@ -1,5 +1,4 @@
 from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
 
 
 # TODO - IDEA - add ExternalEvent class
@@ -18,12 +17,9 @@ class DomainEventMetadata:
 
 @dataclass(frozen=True)
 class DomainEvent:
+    # TODO - each domain event should have its Type, that will be used during convertation to StreamEvent
+    # TODO - there should be mechanism to automatically register event type in mapper
     metadata: DomainEventMetadata
-
-    @staticmethod
-    def create_timestamp() -> str:
-        """Legacy"""
-        return datetime.now(tz=timezone.utc).isoformat()
 
     def get_metadata_as_dict(self) -> dict:
         return asdict(self.metadata)

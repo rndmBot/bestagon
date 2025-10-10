@@ -66,6 +66,7 @@ class EventStore(ABC):
         Events should have monotonicaly increasing stream position, ex: 0, 1, 2, 3
         Any gaps or out of order events are not allowed.
         """
+        # TODO - move it to repository
         versions = [event.stream_position for event in events]
         diffs = [y - x for x, y in pairwise(versions)]
         gapless = all([True if d == 1 else False for d in diffs])
@@ -78,7 +79,7 @@ class EventStore(ABC):
 
     @abstractmethod
     def get_events(self, regex_list: List[str], start_position: int, limit: int) -> List[StreamEvent]:
-        """Allows to retreive events from specific streams specified by regex, strating from specific position."""
+        """Allows to retreive events from specific streams specified by regex, starting from specific position."""
         raise NotImplementedError
 
     @abstractmethod

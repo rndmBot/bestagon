@@ -23,6 +23,10 @@ class ApplicationName(ABC):
         raise NotImplementedError
 
 
+class ProjectionName(ApplicationName):
+    pass
+
+
 class ConventionApplicationName(ApplicationName):
     def __init__(self, system_name: str, application_name: str):
         self._system_name = system_name
@@ -41,6 +45,26 @@ class ConventionApplicationName(ApplicationName):
 
     def to_string(self) -> str:
         return f'{self.system_name}.{self.application_name}'
+
+
+class ConventionProjectionName(ProjectionName):
+    def __init__(self, system_name: str, projection_name: str):
+        self._system_name = system_name
+        self._projection_name = projection_name
+
+    @property
+    def projection_name(self) -> str:
+        return self._projection_name
+
+    @property
+    def system_name(self) -> str:
+        return self._system_name
+
+    def to_regex(self) -> str:
+        return f'{self.to_string()}.*'
+
+    def to_string(self) -> str:
+        return f'{self.system_name}.{self.projection_name}'
 
 
 class StreamNamePolicy(ABC):
@@ -92,8 +116,7 @@ class ConventionStreamName:
 
 
 class ConventionStreamNamePolicy(StreamNamePolicy):
-    def __init__(self, system_name: str, application_name: str, aggregate_type: str):
-        self._system_name = system_name
+    def __init__(self, application_name: ConventionApplicationName, aggregate_type: str):
         self._application_name = application_name
         self._aggregate_type = aggregate_type
 
@@ -102,17 +125,13 @@ class ConventionStreamNamePolicy(StreamNamePolicy):
         return self._aggregate_type
 
     @property
-    def application_name(self) -> str:
+    def application_name(self) -> ConventionApplicationName:
         return self._application_name
-
-    @property
-    def system_name(self) -> str:
-        return self._system_name
 
     def create_stream_name(self, aggregate_id: str) -> str:
         stream_name = ConventionStreamName(
-            system_name=self.system_name,
-            application_name=self.application_name,
+            system_name=self.application_name.system_name,
+            application_name=self.application_name.application_name,
             aggregate_type=self.aggregate_type,
             aggregate_id=aggregate_id
         )
