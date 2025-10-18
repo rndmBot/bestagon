@@ -1,4 +1,5 @@
 from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 
 
 # TODO - IDEA - add ExternalEvent class
@@ -13,6 +14,10 @@ class DomainEventMetadata:
     aggregate_id: str
     aggregate_version: int
     aggregate_type: str
+
+    @staticmethod
+    def create_timestamp() -> str:
+        return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass(frozen=True)
