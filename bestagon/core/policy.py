@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from bestagon.domain.application import Application
+
 
 class StreamNamePolicy(ABC):
     @abstractmethod
-    def create_stream_name(self, aggregate_id: str) -> str:
+    def create_stream_name(self, aggregate_type: str, aggregate_id: str) -> str:
         raise NotImplementedError
 
 
@@ -50,24 +52,35 @@ class ConventionStreamName:
         return obj
 
 
-class ConventionStreamNamePolicy(StreamNamePolicy):
-    def __init__(self, application_name: ConventionApplicationName, aggregate_type: str):
-        self._application_name = application_name
-        self._aggregate_type = aggregate_type
+class SimpleStreamNamePolicy(StreamNamePolicy):
+    """Returns stream name in form {AggregateType}-{AggregateId}"""
+    def create_stream_name(self, aggregate_type: str, aggregate_id: str) -> str:
+        return f'{aggregate_type}-{aggregate_id}'
+
+
+class ApplicationStreamNamePolicy(StreamNamePolicy):
+    """Returns steam name in form: {application_name}.{aggregate_type}-{aggregate_id}"""
+    def __init__(self, application: Application):
+        self._application = application
 
     @property
-    def aggregate_type(self) -> str:
-        return self._aggregate_type
+    def application(self) -> Application:
+        return self._application
+
+    def create_stream_name(self, aggregate_type: str, aggregate_id: str) -> str:
+        # TODO - validation, aggregate type and id should not be empty
+        return f'{self.application.name}.{aggregate_type}-{aggregate_id}'
+
+
+class SystemStreamNamePolicy(StreamNamePolicy):
+    """Returns steam name in form: {system_name}.{application_name}.{aggregate_type}-{aggregate_id}"""
+    def __init__(self, application: Application):
+        self._application = application
 
     @property
-    def application_name(self) -> ConventionApplicationName:
-        return self._application_name
+    def application(self) -> Application:
+        return self._application
 
-    def create_stream_name(self, aggregate_id: str) -> str:
-        stream_name = ConventionStreamName(
-            system_name=self.application_name.system_name,
-            application_name=self.application_name.application_name,
-            aggregate_type=self.aggregate_type,
-            aggregate_id=aggregate_id
-        )
-        return stream_name.to_string()
+    def create_stream_name(self, aggregate_type: str, aggregate_id: str) -> str:
+        # TODO - validation, aggregate type and id should not be empty
+        return f'{self.application.system.name}.{self.application.name}.{aggregate_type}-{aggregate_id}'

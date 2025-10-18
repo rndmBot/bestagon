@@ -1,28 +1,37 @@
 import logging
 from itertools import pairwise
-from typing import TYPE_CHECKING, List
+from typing import List
 
 from bestagon.core.mapper import Mapper
 from bestagon.core.policy import StreamNamePolicy
+from bestagon.domain.aggregate import Aggregate
+from bestagon.domain.application import Application
 from bestagon.domain.domain_event import DomainEvent
 from bestagon.core.event_store import EventStore
 from bestagon.exceptions import AggregateNotFoundError, IntegrityError
-
-if TYPE_CHECKING:
-    from bestagon.domain.aggregate import Aggregate
-
 
 logger = logging.getLogger(__name__)
 
 
 class EventSourcedRepository:
-    def __init__(self, event_store: EventStore, stream_name_policy: StreamNamePolicy, mapper: Mapper):
+    def __init__(
+            self,
+            event_store: EventStore,
+            stream_name_policy: StreamNamePolicy,
+            mapper: Mapper,
+            application: Application = None
+    ):
+        self._application = application
         self._event_store = event_store
         self._stream_name_policy = stream_name_policy
         self._mapper = mapper
 
     def __contains__(self, item):
         return self.contains(item)
+
+    @property
+    def application(self) -> Application:
+        return self._application
 
     @property
     def mapper(self) -> Mapper:
@@ -36,11 +45,11 @@ class EventSourcedRepository:
     def stream_name_policy(self) -> StreamNamePolicy:
         return self._stream_name_policy
 
-    def contains(self, aggregate_id) -> bool:
+    def contains(self, aggregate_type: str, aggregate_id: str) -> bool:
         stream_id = self.stream_name_policy.create_stream_name(aggregate_id=aggregate_id)
         return self.event_store.stream_exists(stream_name=stream_id)
 
-    def get_by_id(self, aggregate_id: str) -> 'Aggregate':
+    def get_by_id(self, aggregate_type: str, aggregate_id: str) -> Aggregate:
         domain_events: List[DomainEvent] = list()
         stream_name = self.stream_name_policy.create_stream_name(aggregate_id=aggregate_id)
         stored_events = self.event_store.get_stream(stream_name=stream_name)
@@ -55,7 +64,7 @@ class EventSourcedRepository:
         aggregate = self.reconstruct_aggregate(events=domain_events)
         return aggregate
 
-    def reconstruct_aggregate(self, events: List[DomainEvent]) -> 'Aggregate':
+    def reconstruct_aggregate(self, events: List[DomainEvent]) -> Aggregate:
         created = events.pop(0)
         if not isinstance(created, Aggregate.Created):
             raise TypeError(f'Invalid event type, expected instance of class <Aggregate.Created>, got {type(created)}')
@@ -66,7 +75,7 @@ class EventSourcedRepository:
             aggregate.mutate(event)
         return aggregate
 
-    def save(self, aggregate: 'Aggregate') -> None:
+    def save(self, aggregate: Aggregate) -> None:
         if not aggregate.pending_events:
             return
 
