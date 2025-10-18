@@ -13,7 +13,7 @@ class CommandBus(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def register_command_handler(self, command_type: Type[Command], handler: Callable[[Command], None]) -> None:
+    def register_command_handler(self, command_type: Type[Command], handler: Callable) -> None:
         raise NotImplementedError
 
 
@@ -27,6 +27,6 @@ class SimpleCommandBus(CommandBus):
             raise HandlerNotFound(f'No handler found for command {type(command)}')
         handler(command)
 
-    def register_command_handler(self, command_type: Type[Command], handler: Callable[[Command], None]) -> None:
+    def register_command_handler(self, command_type: Type[Command], handler: Callable) -> None:
         # Command can have one and only one handler
         self._handler_map[command_type] = handler

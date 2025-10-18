@@ -10,7 +10,8 @@ class DomainEventMetadata:
     # TODO - add correlation_id
     # TODO - add causation_id
     # TODO - ORLY - inherit dict and use getters to get aggregate_id, version etc.
-    timestamp: str
+
+    timestamp: str  # TODO - turn it into field to create automatically
     aggregate_id: str
     aggregate_version: int
     aggregate_type: str
