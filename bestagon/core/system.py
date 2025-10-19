@@ -14,8 +14,7 @@ class EventSourcedSystem(ABC):
     # TODO - application graph
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
 
-    def __init__(self, name: str, checkpoint_store: CheckpointStore):
-        self._name = name
+    def __init__(self, checkpoint_store: CheckpointStore):
         self._applications: Dict[str, Application] = dict()
         self._projections: Dict[str, Projection] = dict()
         self._checkpoint_store = checkpoint_store
@@ -30,7 +29,7 @@ class EventSourcedSystem(ABC):
 
     @property
     def name(self) -> str:
-        return self._name
+        return self.get_name()
 
     @property
     def projections(self) -> Tuple[Projection, ...]:
@@ -85,6 +84,10 @@ class EventSourcedSystem(ABC):
         if app is None:
             raise ApplicationError(f'No application with name {name} found.')
         return app
+
+    @abstractmethod
+    def get_name(self) -> str:
+        raise NotImplementedError
 
     def get_projection(self, name: str) -> Projection:
         proj = self._projections.get(name)
