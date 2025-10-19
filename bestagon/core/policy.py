@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from bestagon.domain.application import Application
-
 
 class StreamNamePolicy(ABC):
     @abstractmethod
@@ -60,27 +58,16 @@ class SimpleStreamNamePolicy(StreamNamePolicy):
 
 class ApplicationStreamNamePolicy(StreamNamePolicy):
     """Returns steam name in form: {application_name}.{aggregate_type}-{aggregate_id}"""
-    def __init__(self, application: Application):
-        self._application = application
+    def __init__(self, application_name: str):
+        self._application_name = application_name
 
     @property
-    def application(self) -> Application:
-        return self._application
+    def application_name(self) -> str:
+        return self._application_name
 
     def create_stream_name(self, aggregate_type: str, aggregate_id: str) -> str:
-        # TODO - validation, aggregate type and id should not be empty
-        return f'{self.application.name}.{aggregate_type}-{aggregate_id}'
+        assert self.application_name
+        assert aggregate_type
+        assert aggregate_id
 
-
-class SystemStreamNamePolicy(StreamNamePolicy):
-    """Returns steam name in form: {system_name}.{application_name}.{aggregate_type}-{aggregate_id}"""
-    def __init__(self, application: Application):
-        self._application = application
-
-    @property
-    def application(self) -> Application:
-        return self._application
-
-    def create_stream_name(self, aggregate_type: str, aggregate_id: str) -> str:
-        # TODO - validation, aggregate type and id should not be empty
-        return f'{self.application.system.name}.{self.application.name}.{aggregate_type}-{aggregate_id}'
+        return f'{self.application_name}.{aggregate_type}-{aggregate_id}'

@@ -4,21 +4,15 @@ from typing import List, Tuple
 
 from bestagon.core.event_store import EventStore
 from bestagon.core.mapper import Mapper
-from bestagon.core.system import EventSourcedSystem
+from bestagon.core.policy import ApplicationStreamNamePolicy
+from bestagon.core.repository import EventSourcedRepository
 from bestagon.domain.domain_event import DomainEvent
 
 
 class EventProcessor(ABC):
-    def __init__(self):
-        self._system = None
-
     @property
     def name(self) -> str:
         return self.get_name()
-
-    @property
-    def system(self) -> EventSourcedSystem:
-        return self._system
 
     @abstractmethod
     def get_name(self) -> str:
@@ -27,11 +21,6 @@ class EventProcessor(ABC):
     @abstractmethod
     def process_event(self, event: DomainEvent) -> None:
         raise NotImplementedError
-
-    def set_system(self, system: EventSourcedSystem) -> None:
-        if not isinstance(system, EventSourcedSystem):
-            raise TypeError(f'Expected <{EventSourcedSystem.__class__.__qualname__}>, got {type(system)}')
-        self._system = system
 
 
 class Leader(EventProcessor):
@@ -61,6 +50,11 @@ class Application(Leader, Follower):
         super().__init__()
         self._event_store = event_store
         self._mapper = mapper
+        self._repository = EventSourcedRepository(
+            event_store=event_store,
+            stream_name_policy=ApplicationStreamNamePolicy(application_name=self.get_name()),
+            mapper=mapper
+        )
 
     @property
     def event_store(self) -> EventStore:
@@ -70,11 +64,15 @@ class Application(Leader, Follower):
     def mapper(self) -> Mapper:
         return self._mapper
 
+    @property
+    def repository(self) -> EventSourcedRepository:
+        return self._repository
+
     def get_events(self, start_position: int, limit: int) -> List[Tuple[DomainEvent, int]]:
         """Returns two-tuple (DomainEvent, CommitPosition)"""
         # TODO - rethink return type
-        # TODO - ACHTUNG - should be refactored
-        stream_events = self.event_store.get_events(regex_list=[self.name.to_regex()], start_position=start_position, limit=limit)
+        # TODO - ACHTUNG - redesign and refactor
+        stream_events = self.event_store.get_events(regex_list=[f'.*{self.name}.*'], start_position=start_position, limit=limit)
 
         domain_events = list()
         for stream_event in stream_events:

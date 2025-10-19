@@ -5,7 +5,6 @@ from typing import List
 from bestagon.core.mapper import Mapper
 from bestagon.core.policy import StreamNamePolicy
 from bestagon.domain.aggregate import Aggregate
-from bestagon.domain.application import Application
 from bestagon.domain.domain_event import DomainEvent
 from bestagon.core.event_store import EventStore
 from bestagon.exceptions import AggregateNotFoundError, IntegrityError
@@ -18,20 +17,11 @@ class EventSourcedRepository:
             self,
             event_store: EventStore,
             stream_name_policy: StreamNamePolicy,
-            mapper: Mapper,
-            application: Application = None
+            mapper: Mapper
     ):
-        self._application = application
         self._event_store = event_store
         self._stream_name_policy = stream_name_policy
         self._mapper = mapper
-
-    def __contains__(self, item):
-        return self.contains(item)
-
-    @property
-    def application(self) -> Application:
-        return self._application
 
     @property
     def mapper(self) -> Mapper:
@@ -46,12 +36,12 @@ class EventSourcedRepository:
         return self._stream_name_policy
 
     def contains(self, aggregate_type: str, aggregate_id: str) -> bool:
-        stream_id = self.stream_name_policy.create_stream_name(aggregate_id=aggregate_id)
+        stream_id = self.stream_name_policy.create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
         return self.event_store.stream_exists(stream_name=stream_id)
 
     def get_by_id(self, aggregate_type: str, aggregate_id: str) -> Aggregate:
         domain_events: List[DomainEvent] = list()
-        stream_name = self.stream_name_policy.create_stream_name(aggregate_id=aggregate_id)
+        stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
         stored_events = self.event_store.get_stream(stream_name=stream_name)
 
         if not stored_events:
@@ -92,6 +82,6 @@ class EventSourcedRepository:
             new_stored_event = self.mapper.to_new_stream_event(domain_event=domain_event)
             new_stored_events.append(new_stored_event)
 
-        stream_name = self.stream_name_policy.create_stream_name(aggregate_id=aggregate.id)
+        stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate.get_type(), aggregate_id=aggregate.id)
         self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
         aggregate.clear_events()
