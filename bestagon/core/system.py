@@ -2,8 +2,8 @@ import logging
 from abc import abstractmethod, ABC
 from typing import Tuple, Dict
 
+from bestagon.core.application import Application, Projection, Follower
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.domain.application import Projection, Application, Follower
 from bestagon.exceptions import ApplicationError
 
 
@@ -26,10 +26,6 @@ class EventSourcedSystem(ABC):
     @property
     def checkpoint_store(self) -> CheckpointStore:
         return self._checkpoint_store
-
-    @property
-    def name(self) -> str:
-        return self.get_name()
 
     @property
     def projections(self) -> Tuple[Projection, ...]:
@@ -84,10 +80,6 @@ class EventSourcedSystem(ABC):
         if app is None:
             raise ApplicationError(f'No application with name {name} found.')
         return app
-
-    @abstractmethod
-    def get_name(self) -> str:
-        raise NotImplementedError
 
     def get_projection(self, name: str) -> Projection:
         proj = self._projections.get(name)

@@ -52,7 +52,7 @@ class Application(Leader, Follower):
         self._mapper = mapper
         self._repository = EventSourcedRepository(
             event_store=event_store,
-            stream_name_policy=ApplicationStreamNamePolicy(application_name=self.get_name()),
+            stream_name_policy=ApplicationStreamNamePolicy(application_name=self.get_name()),  # TODO - hardcoded to simplify concept
             mapper=mapper
         )
 
@@ -72,7 +72,8 @@ class Application(Leader, Follower):
         """Returns two-tuple (DomainEvent, CommitPosition)"""
         # TODO - rethink return type
         # TODO - ACHTUNG - redesign and refactor
-        stream_events = self.event_store.get_events(regex_list=[f'.*{self.name}.*'], start_position=start_position, limit=limit)
+        # TODO - ACHTUNG - currently gets events using application name as regex, do not consider system name for simplicity
+        stream_events = self.event_store.get_events(regex_list=[f'{self.name}.*'], start_position=start_position, limit=limit)
 
         domain_events = list()
         for stream_event in stream_events:

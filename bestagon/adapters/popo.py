@@ -27,8 +27,6 @@ class POPOEventStore(EventStore):
         pass
 
     def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
-        self.validate_new_events(events)
-
         recorded_versions = self._streams.get(stream_name)
         recorded_versions = recorded_versions or list()
 

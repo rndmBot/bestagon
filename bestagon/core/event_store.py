@@ -56,22 +56,8 @@ class EventStore(ABC):
     def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
         """
         Adds new events to specified event stream.
-        ACHTUNG - validate events before recording them into the event store.
         """
         raise NotImplementedError
-
-    @staticmethod
-    def validate_new_events(events: List[NewStreamEvent]) -> None:
-        """
-        Events should have monotonicaly increasing stream position, ex: 0, 1, 2, 3
-        Any gaps or out of order events are not allowed.
-        """
-        # TODO - move it to repository
-        versions = [event.stream_position for event in events]
-        diffs = [y - x for x, y in pairwise(versions)]
-        gapless = all([True if d == 1 else False for d in diffs])
-        if not gapless:
-            raise IntegrityError('Events must be gapless to record in event store.')
 
     @abstractmethod
     def close(self) -> None:

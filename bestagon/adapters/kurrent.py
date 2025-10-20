@@ -14,8 +14,6 @@ class KurrentDBEventStore(EventStore):
         self.client.close()
 
     def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
-        self.validate_new_events(events)
-
         # Check current version
         current_version = self.client.get_current_version(stream_name=stream_name)
         first_event = events[0]
