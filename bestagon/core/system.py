@@ -4,7 +4,7 @@ from typing import Tuple, Dict
 
 from bestagon.core.application import Application, Projection, Follower
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.message_bus import AsyncCommandBus, CommandBus
+from bestagon.core.message_bus import AsyncCommandBus
 from bestagon.exceptions import ApplicationError
 
 
@@ -31,7 +31,7 @@ class EventSourcedSystem(ABC):
         return self._checkpoint_store
 
     @property
-    def command_bus(self) -> CommandBus:
+    def command_bus(self) -> AsyncCommandBus:
         return self._command_bus
 
     @property
@@ -107,6 +107,9 @@ class EventSourcedSystem(ABC):
         # TODO - should reset checkpoint
         raise NotImplementedError
 
+    def start(self) -> None:
+        self.command_bus.start()
+
     def start_processing(self) -> None:
         # TODO - there should be another way to propagate events between applications
         for application in self.applications:
@@ -114,3 +117,6 @@ class EventSourcedSystem(ABC):
 
         for projection in self.projections:
             self._process_follower(follower=projection)
+
+    async def stop(self) -> None:
+        await self.command_bus.stop()
