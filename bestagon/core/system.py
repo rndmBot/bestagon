@@ -4,6 +4,7 @@ from typing import Tuple, Dict
 
 from bestagon.core.application import Application, Projection, Follower
 from bestagon.core.checkpoint_store import CheckpointStore
+from bestagon.core.message_bus import AsyncCommandBus, CommandBus
 from bestagon.exceptions import ApplicationError
 
 
@@ -15,9 +16,11 @@ class EventSourcedSystem(ABC):
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
 
     def __init__(self, checkpoint_store: CheckpointStore):
+        self._command_bus = AsyncCommandBus()
+        self._checkpoint_store = checkpoint_store
+
         self._applications: Dict[str, Application] = dict()
         self._projections: Dict[str, Projection] = dict()
-        self._checkpoint_store = checkpoint_store
 
     @property
     def applications(self) -> Tuple[Application, ...]:
@@ -26,6 +29,10 @@ class EventSourcedSystem(ABC):
     @property
     def checkpoint_store(self) -> CheckpointStore:
         return self._checkpoint_store
+
+    @property
+    def command_bus(self) -> CommandBus:
+        return self._command_bus
 
     @property
     def projections(self) -> Tuple[Projection, ...]:
