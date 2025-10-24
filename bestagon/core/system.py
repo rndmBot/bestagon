@@ -4,7 +4,7 @@ from typing import Tuple, Dict
 
 from bestagon.core.application import Application, Projection, Follower
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.message_bus import AsyncCommandBus
+from bestagon.core.message_bus import AsyncCommandBus, AsyncQueryBus
 from bestagon.exceptions import ApplicationError
 
 
@@ -15,8 +15,12 @@ class EventSourcedSystem(ABC):
     # TODO - application graph
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
 
+    # TODO - how to automatically register command handlers???
+    # TODO - how to automatically register query handlers???
+
     def __init__(self, checkpoint_store: CheckpointStore):
         self._command_bus = AsyncCommandBus()
+        self._query_bus = AsyncQueryBus()
         self._checkpoint_store = checkpoint_store
 
         self._applications: Dict[str, Application] = dict()
@@ -37,6 +41,10 @@ class EventSourcedSystem(ABC):
     @property
     def projections(self) -> Tuple[Projection, ...]:
         return tuple(self._projections.values())
+
+    @property
+    def query_bus(self) -> AsyncQueryBus:
+        return self._query_bus
 
     def _process_follower(self, follower: Follower) -> None:
         if not follower.leaders:
@@ -95,10 +103,12 @@ class EventSourcedSystem(ABC):
         return proj
 
     def process_application(self, name: str) -> None:
+        # TODO - get rid of it, use subscriptions
         app = self.get_application(name=name)
         self._process_follower(follower=app)
 
     def process_projection(self, name: str) -> None:
+        # TODO - get rid of it, use subscriptions
         proj = self.get_projection(name=name)
         self._process_follower(follower=proj)
 
@@ -107,9 +117,6 @@ class EventSourcedSystem(ABC):
         # TODO - should reset checkpoint
         raise NotImplementedError
 
-    def start(self) -> None:
-        self.command_bus.start()
-
     def start_processing(self) -> None:
         # TODO - there should be another way to propagate events between applications
         for application in self.applications:
@@ -117,6 +124,3 @@ class EventSourcedSystem(ABC):
 
         for projection in self.projections:
             self._process_follower(follower=projection)
-
-    async def stop(self) -> None:
-        await self.command_bus.stop()

@@ -30,5 +30,9 @@ class HandlerNotFound(BestagonError):
     pass
 
 
+class HandlerAlreadyRegistered(BestagonError):
+    pass
+
+
 class ValidationError(BestagonError):
     pass

@@ -6,7 +6,7 @@ from bestagon.core.mapper import Mapper
 from bestagon.core.policy import StreamNamePolicy
 from bestagon.domain.aggregate import Aggregate
 from bestagon.domain.domain_event import DomainEvent
-from bestagon.core.event_store import EventStore
+from bestagon.core.event_store import AsyncEventStore
 from bestagon.exceptions import AggregateNotFoundError, IntegrityError
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class EventSourcedRepository:
     def __init__(
             self,
-            event_store: EventStore,
+            event_store: AsyncEventStore,
             stream_name_policy: StreamNamePolicy,
             mapper: Mapper
     ):
@@ -28,21 +28,21 @@ class EventSourcedRepository:
         return self._mapper
 
     @property
-    def event_store(self) -> EventStore:
+    def event_store(self) -> AsyncEventStore:
         return self._event_store
 
     @property
     def stream_name_policy(self) -> StreamNamePolicy:
         return self._stream_name_policy
 
-    def contains(self, aggregate_type: str, aggregate_id: str) -> bool:
+    async def contains(self, aggregate_type: str, aggregate_id: str) -> bool:
         stream_id = self.stream_name_policy.create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
-        return self.event_store.stream_exists(stream_name=stream_id)
+        return await self.event_store.stream_exists(stream_name=stream_id)
 
-    def get_by_id(self, aggregate_type: str, aggregate_id: str) -> Aggregate:
+    async def get_by_id(self, aggregate_type: str, aggregate_id: str) -> Aggregate:
         domain_events: List[DomainEvent] = list()
         stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
-        stored_events = self.event_store.get_stream(stream_name=stream_name)
+        stored_events = await self.event_store.get_stream(stream_name=stream_name)
 
         if not stored_events:
             raise AggregateNotFoundError(f'Aggregate {aggregate_id} not found.')
@@ -65,7 +65,7 @@ class EventSourcedRepository:
             aggregate.mutate(event)
         return aggregate
 
-    def save(self, aggregate: Aggregate) -> None:
+    async def save(self, aggregate: Aggregate) -> None:
         if not aggregate.pending_events:
             return
 
@@ -83,5 +83,5 @@ class EventSourcedRepository:
             new_stored_events.append(new_stored_event)
 
         stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate.get_type(), aggregate_id=aggregate.id)
-        self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
+        await self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
         aggregate.clear_events()

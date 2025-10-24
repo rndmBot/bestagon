@@ -1,11 +1,14 @@
 from abc import abstractmethod, ABC
 
 from typing import List, Tuple
+from uuid import uuid4
 
-from bestagon.core.event_store import EventStore
+from bestagon.core.checkpoint_store import CheckpointStore
+from bestagon.core.event_store import AsyncEventStore
 from bestagon.core.mapper import Mapper
 from bestagon.core.policy import ApplicationStreamNamePolicy
 from bestagon.core.repository import EventSourcedRepository
+from bestagon.core.subscription import AsyncApplicationSubscription
 from bestagon.domain.domain_event import DomainEvent
 
 
@@ -46,9 +49,10 @@ class Follower(EventProcessor):
 
 
 class Application(Leader, Follower):
-    def __init__(self, event_store: EventStore, mapper: Mapper):
+    def __init__(self, event_store: AsyncEventStore, checkpoint_store: CheckpointStore, mapper: Mapper):
         super().__init__()
         self._event_store = event_store
+        self._checkpoint_store = checkpoint_store  # TODO - Projection has it also
         self._mapper = mapper
         self._repository = EventSourcedRepository(
             event_store=event_store,
@@ -57,7 +61,11 @@ class Application(Leader, Follower):
         )
 
     @property
-    def event_store(self) -> EventStore:
+    def checkpoint_store(self) -> CheckpointStore:
+        return self._checkpoint_store
+
+    @property
+    def event_store(self) -> AsyncEventStore:
         return self._event_store
 
     @property
@@ -68,20 +76,21 @@ class Application(Leader, Follower):
     def repository(self) -> EventSourcedRepository:
         return self._repository
 
-    def get_events(self, start_position: int, limit: int) -> List[Tuple[DomainEvent, int]]:
-        """Returns two-tuple (DomainEvent, CommitPosition)"""
-        # TODO - rethink return type
-        # TODO - ACHTUNG - redesign and refactor
-        # TODO - ACHTUNG - currently gets events using application name as regex, do not consider system name for simplicity
-        stream_events = self.event_store.get_events(regex_list=[f'{self.name}.*'], start_position=start_position, limit=limit)
+    async def create_application_subscription(self, subscription_id: str, start_position: int) -> AsyncApplicationSubscription:
+        event_store_subscription = await self.event_store.create_stream_subscription(
+            subscription_id=str(uuid4()),
+            regex=f'{self.name}.*',
+            start_position=start_position
+        )
+        app_subscription = AsyncApplicationSubscription(
+            subscription_id=subscription_id,
+            application_name=self.name,
+            mapper=self.mapper,
+            event_store_subscription=event_store_subscription
+        )
+        return app_subscription
 
-        domain_events = list()
-        for stream_event in stream_events:
-            domain_event = self.mapper.to_domain_event(stream_event=stream_event)
-            two_tuple = (domain_event, stream_event.commit_position)
-            domain_events.append(two_tuple)
-
-        return domain_events
+    # TODO - subscribe to application (should be also in Projection)
 
 
 class Projection(Follower):

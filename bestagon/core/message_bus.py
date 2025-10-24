@@ -1,11 +1,9 @@
-import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Type, Callable
 
-from bestagon.core.message import Command
-from bestagon.exceptions import HandlerNotFound
-
+from bestagon.core.message import Command, Query
+from bestagon.exceptions import HandlerNotFound, HandlerAlreadyRegistered
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +13,7 @@ class CommandBus(ABC):
 
     @abstractmethod
     def execute(self, command: Command) -> None:
+        # TODO - think about returning command result (executed, failed etc.)
         raise NotImplementedError
 
     @abstractmethod
@@ -26,47 +25,43 @@ class CommandBus(ABC):
         raise NotImplementedError
 
 
+class QueryBus(ABC):
+    # TODO - can contain middleware
+    # TODO - there are multiple types of queries - https://docs.axoniq.io/axon-framework-reference/4.11/queries/
+
+    @abstractmethod
+    def execute(self, query: Query) -> any:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_query_handler(self, query_type: Type[Query]) -> Callable:
+        raise NotImplementedError
+
+    @abstractmethod
+    def register_query_handler(self, query_type: Type[Query], query_handler: Callable) -> None:
+        raise NotImplementedError
+
+
 class AsyncCommandBus(CommandBus):
     def __init__(self):
-        self.queue = asyncio.Queue()
-        self.shutdown_timeout_sec = 10
         self._handler_map = dict()
-        self._running = False
-        self._shutdown = False  # TODO - Python 3.10 compatibility, should be replaced with queue.shutdown()
-        self._start_task = None
 
-    async def _process_queue(self) -> None:
-        if self.is_running():
-            return
-
-        logger.info('Starting command bus.')
-        self._running = True
-        self._shutdown = False
-        while self.is_running():
-            command = await self.queue.get()
-            command_handler = self.get_command_handler(type(command))
-            logger.debug(f'Handling command {command} with handler {command_handler}')
-            await command_handler(command)
-            logger.debug(f'Command {command} have been handled.')
-            self.queue.task_done()
-
-    def execute(self, command: Command) -> None:
+    async def execute(self, command: Command) -> None:
         if not isinstance(command, Command):
             raise TypeError(f'Invalid command type, expected <Command>, got {type(command)}')
-        if self._shutdown:
-            raise RuntimeError('Failed to execute command, shutdown initiated.')
 
-        self.queue.put_nowait(command)
-        logger.info(f'Command put on the bus: {command}')
+        handler = self.get_command_handler(command_type=type(command))
+        await handler(command)
 
     def get_command_handler(self, command_type: Type[Command]) -> Callable:
         if not issubclass(command_type, Command):
             raise TypeError(f'Invalid command type, expected subclass <Command>, got {command_type}')
 
-        return self._handler_map[command_type]
+        handler = self._handler_map.get(command_type)
+        if handler is None:
+            raise HandlerNotFound(f'No handler defined for command {command_type}')
 
-    def is_running(self) -> bool:
-        return self._running
+        return handler
 
     def register_command_handler(self, command_type: Type[Command], handler: Callable) -> None:
         if not issubclass(command_type, Command):
@@ -77,12 +72,30 @@ class AsyncCommandBus(CommandBus):
         # Command can have one and only one handler
         self._handler_map[command_type] = handler
 
-    def start(self) -> None:
-        self._start_task = asyncio.create_task(self._process_queue())
 
-    async def stop(self) -> None:
-        logger.info('Shutting down command bus...')
-        self._shutdown = True
-        await asyncio.wait_for(self.queue.join(), self.shutdown_timeout_sec)
-        self._running = False
-        logger.info('Command bus have been shut down.')
+class AsyncQueryBus(QueryBus):
+    def __init__(self):
+        self._handler_map = dict()
+
+    def get_query_handler(self, query_type: Type[Query]) -> Callable:
+        handler = self._handler_map.get(query_type)
+        if handler is None:
+            raise HandlerNotFound(f'No handler registered for query {query_type}')
+        return handler
+
+    def register_query_handler(self, query_type: Type[Query], query_handler: Callable) -> None:
+        if not issubclass(query_type, Query):
+            raise TypeError(f'Invalid query type, expercted <Query>, got {query_type}')
+
+        try:
+            _ = self.get_query_handler(query_type)
+            raise HandlerAlreadyRegistered(f'Handler for query {query_type} have already been registered')
+        except HandlerNotFound:
+            pass
+
+        self._handler_map[query_type] = query_handler
+
+    async def execute(self, query: Query) -> any:
+        handler = self.get_query_handler(query_type=type(query))
+        query_result = await handler(query)
+        return query_result

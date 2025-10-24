@@ -4,15 +4,15 @@ from bestagon.core.checkpoint_store import CheckpointStore
 
 
 class Neo4jCheckpointStore(CheckpointStore):
-    def __init__(self, driver: neo4j.Driver, database_name: str):
+    def __init__(self, driver: neo4j.AsyncDriver, database_name: str):
         self.driver = driver
         self.database_name = database_name
-        self.create_database()
+        self.create_database()  # TODO - ACHTUNG async call
 
-    def create_database(self) -> None:
+    async def create_database(self) -> None:
         create_cypher = "CREATE DATABASE $database_name IF NOT EXISTS"
-        with self.driver.session() as sess:
-            sess.run(
+        async with self.driver.session() as sess:
+            await sess.run(
                 create_cypher,  # NOQA
                 database_name=self.database_name
             )
@@ -24,21 +24,21 @@ class Neo4jCheckpointStore(CheckpointStore):
         ON n.name
         '''
 
-        with self.driver.session(database=self.database_name) as sess:
-            sess.run(index_cypher)  # NOQA
+        async with self.driver.session(database=self.database_name) as sess:
+            await sess.run(index_cypher)  # NOQA
 
-    def get_checkpoint(self, name: str) -> int:
+    async def get_checkpoint(self, name: str) -> int:
         cypher = '''
         MATCH (c:Checkpoint {name: $name})
         RETURN c.value
         '''
 
-        with self.driver.session(database=self.database_name, default_access_mode=neo4j.READ_ACCESS) as sess:
-            result = sess.run(
+        async with self.driver.session(database=self.database_name, default_access_mode=neo4j.READ_ACCESS) as sess:
+            result = await sess.run(
                 cypher,  # NOQA
                 name=name
             )
-            data = result.single()
+            data = await result.single()
             if data is not None:
                 data = data.value()
             else:
@@ -46,14 +46,14 @@ class Neo4jCheckpointStore(CheckpointStore):
 
         return data
 
-    def set_checkpoint(self, name: str, value: int) -> None:
+    async def set_checkpoint(self, name: str, value: int) -> None:
         cypher = '''
         MERGE (c:Checkpoint {name: $name})
         SET c.value = $value
         '''
 
-        with self.driver.session(database=self.database_name, default_access_mode=neo4j.WRITE_ACCESS) as sess:
-            sess.run(
+        async with self.driver.session(database=self.database_name, default_access_mode=neo4j.WRITE_ACCESS) as sess:
+            await sess.run(
                 cypher,  # NOQA
                 name=name,
                 value=value
