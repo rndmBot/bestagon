@@ -63,7 +63,7 @@ class AsyncEventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_stream_subscription(self, subscription_id: str, regex: str, start_position: int) -> AsyncEventStoreSubscription:
+    async def create_stream_subscription(self, subscription_id: str, regex: str, start_position: int) -> 'AsyncEventStoreSubscription':
         raise NotImplementedError
 
     @abstractmethod
