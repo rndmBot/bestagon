@@ -6,6 +6,7 @@ from typing import List, Union, Sequence, cast
 import grpc
 from kurrentdbclient import StreamState, NewEvent, DEFAULT_EXCLUDE_FILTER, AsyncKurrentDBClient, AsyncCatchupSubscription
 from kurrentdbclient.common import DEFAULT_WINDOW_SIZE, DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER
+from kurrentdbclient.exceptions import NotFoundError
 
 from bestagon.core.event_store import StreamEvent, AsyncEventStore, NewStreamEvent
 from bestagon.core.subscription import SubscriptionParameters, AsyncEventStoreSubscription
@@ -140,8 +141,11 @@ class AsyncKurrentDBEventStore(AsyncEventStore):
         return stream_events
 
     async def stream_exists(self, stream_name: str) -> bool:
-        events = await self.client.get_stream(stream_name=stream_name, backwards=True, limit=1)
-        return bool(events)
+        try:
+            events = await self.client.get_stream(stream_name=stream_name, backwards=True, limit=1)
+            return bool(events)
+        except NotFoundError:
+            return False
 
 
 # class KurrentDBEventStore(EventStore):
