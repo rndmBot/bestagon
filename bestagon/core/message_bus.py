@@ -1,5 +1,4 @@
 import logging
-from abc import ABC, abstractmethod
 from typing import Type, Callable
 
 from bestagon.core.message import Command, Query
@@ -8,41 +7,9 @@ from bestagon.exceptions import HandlerNotFound, HandlerAlreadyRegistered
 logger = logging.getLogger(__name__)
 
 
-class CommandBus(ABC):
+class AsyncCommandBus:
     # TODO - command bus can contain middleware
 
-    @abstractmethod
-    def execute(self, command: Command) -> None:
-        # TODO - think about returning command result (executed, failed etc.)
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_command_handler(self, command_type: Type[Command]) -> Callable:
-        raise NotImplementedError
-
-    @abstractmethod
-    def register_command_handler(self, command_type: Type[Command], handler: Callable) -> None:
-        raise NotImplementedError
-
-
-class QueryBus(ABC):
-    # TODO - can contain middleware
-    # TODO - there are multiple types of queries - https://docs.axoniq.io/axon-framework-reference/4.11/queries/
-
-    @abstractmethod
-    def execute(self, query: Query) -> any:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_query_handler(self, query_type: Type[Query]) -> Callable:
-        raise NotImplementedError
-
-    @abstractmethod
-    def register_query_handler(self, query_type: Type[Query], query_handler: Callable) -> None:
-        raise NotImplementedError
-
-
-class AsyncCommandBus(CommandBus):
     def __init__(self):
         self._handler_map = dict()
 
@@ -73,7 +40,10 @@ class AsyncCommandBus(CommandBus):
         self._handler_map[command_type] = handler
 
 
-class AsyncQueryBus(QueryBus):
+class AsyncQueryBus:
+    # TODO - can contain middleware
+    # TODO - there are multiple types of queries - https://docs.axoniq.io/axon-framework-reference/4.11/queries/
+
     def __init__(self):
         self._handler_map = dict()
 

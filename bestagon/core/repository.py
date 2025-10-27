@@ -2,17 +2,17 @@ import logging
 from itertools import pairwise
 from typing import List
 
+from bestagon.core.aggregate import Aggregate
 from bestagon.core.mapper import Mapper
+from bestagon.core.message import DomainEvent
 from bestagon.core.policy import StreamNamePolicy
-from bestagon.domain.aggregate import Aggregate
-from bestagon.domain.domain_event import DomainEvent
 from bestagon.core.event_store import AsyncEventStore
 from bestagon.exceptions import AggregateNotFoundError, IntegrityError
 
 logger = logging.getLogger(__name__)
 
 
-class EventSourcedRepository:
+class AsyncRepository:
     def __init__(
             self,
             event_store: AsyncEventStore,

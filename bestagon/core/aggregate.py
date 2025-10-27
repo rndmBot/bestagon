@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Tuple
 
+from bestagon.core.message import DomainEvent, Created
 from bestagon.exceptions import AggregateIDMismatch, AggregateVersionError
-from bestagon.domain.domain_event import DomainEvent, Created
 
 
 class Aggregate(ABC):

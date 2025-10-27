@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from bestagon.core.mapper import Mapper
-from bestagon.domain.domain_event import DomainEvent
+from bestagon.core.message import ApplicationEvent
 
 if TYPE_CHECKING:
     from bestagon.core.event_store import StreamEvent
@@ -14,7 +14,7 @@ class SubscriptionParameters:
     pass
 
 
-class Subscription(ABC):
+class AsyncSubscription(ABC):
     def __init__(self, subscription_id: str, parameters: SubscriptionParameters):
         self._subscription_id = subscription_id
         self._parameters = parameters
@@ -47,13 +47,13 @@ class Subscription(ABC):
         raise NotImplementedError
 
 
-class AsyncEventStoreSubscription(Subscription):
+class AsyncEventStoreSubscription(AsyncSubscription):
     @abstractmethod
     async def next_event(self) -> 'StreamEvent':
         raise NotImplementedError
 
 
-class AsyncApplicationSubscription(Subscription):
+class AsyncApplicationSubscription(AsyncSubscription):
     def __init__(
             self,
             subscription_id: str,
@@ -70,13 +70,17 @@ class AsyncApplicationSubscription(Subscription):
     def application_name(self) -> str:
         return self._application_name
 
-    async def next_event(self) -> DomainEvent:
+    async def next_event(self) -> ApplicationEvent:
         if not self.running:
             raise StopAsyncIteration
 
         stream_event = await self._event_store_subscription.next_event()
         domain_event = self._mapper.to_domain_event(stream_event=stream_event)
-        return domain_event
+        application_event = ApplicationEvent(
+            commit_position=stream_event.commit_position,
+            domain_event=domain_event
+        )
+        return application_event
 
     async def stop(self) -> None:
         self._running = False

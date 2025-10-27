@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from abc import abstractmethod, ABC
 
 from typing import List, Tuple
@@ -6,10 +8,13 @@ from uuid import uuid4
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_store import AsyncEventStore
 from bestagon.core.mapper import Mapper
+from bestagon.core.message import DomainEvent
 from bestagon.core.policy import ApplicationStreamNamePolicy
-from bestagon.core.repository import EventSourcedRepository
+from bestagon.core.repository import AsyncRepository
 from bestagon.core.subscription import AsyncApplicationSubscription
-from bestagon.domain.domain_event import DomainEvent
+
+
+logger = logging.getLogger(__name__)
 
 
 class EventProcessor(ABC):
@@ -22,47 +27,14 @@ class EventProcessor(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def process_event(self, event: DomainEvent) -> None:
+    async def process_event(self, event: DomainEvent) -> None:
         raise NotImplementedError
 
 
 class Leader(EventProcessor):
-    pass
-
-
-class Follower(EventProcessor):
-    def __init__(self):
-        super().__init__()
-        self._leaders: List[str] = list()
-
-    @property
-    def leaders(self) -> Tuple[str, ...]:
-        return tuple(self._leaders)
-
-    def follow(self, application: 'Application') -> None:
-        if not isinstance(application, Application):
-            raise TypeError
-        if application.name in self.leaders:
-            return
-
-        self._leaders.append(application.name)
-
-
-class Application(Leader, Follower):
-    def __init__(self, event_store: AsyncEventStore, checkpoint_store: CheckpointStore, mapper: Mapper):
-        super().__init__()
+    def __init__(self, event_store: AsyncEventStore, mapper: Mapper):
         self._event_store = event_store
-        self._checkpoint_store = checkpoint_store  # TODO - Projection has it also
         self._mapper = mapper
-        self._repository = EventSourcedRepository(
-            event_store=event_store,
-            stream_name_policy=ApplicationStreamNamePolicy(application_name=self.get_name()),  # TODO - hardcoded to simplify concept
-            mapper=mapper
-        )
-
-    @property
-    def checkpoint_store(self) -> CheckpointStore:
-        return self._checkpoint_store
 
     @property
     def event_store(self) -> AsyncEventStore:
@@ -71,10 +43,6 @@ class Application(Leader, Follower):
     @property
     def mapper(self) -> Mapper:
         return self._mapper
-
-    @property
-    def repository(self) -> EventSourcedRepository:
-        return self._repository
 
     async def create_application_subscription(self, subscription_id: str, start_position: int) -> AsyncApplicationSubscription:
         event_store_subscription = await self.event_store.create_stream_subscription(
@@ -90,7 +58,82 @@ class Application(Leader, Follower):
         )
         return app_subscription
 
-    # TODO - subscribe to application (should be also in Projection)
+
+class Follower(EventProcessor):
+    def __init__(self, checkpoint_store: CheckpointStore):
+        super().__init__()
+        self._checkpoint_store = checkpoint_store
+        self._subscriptions: List[AsyncApplicationSubscription] = list()
+        self._tasks = list()
+
+    @property
+    def checkpoint_store(self) -> CheckpointStore:
+        return self._checkpoint_store
+
+    @property
+    def subscriptions(self) -> Tuple[AsyncApplicationSubscription, ...]:
+        return tuple(self._subscriptions)
+
+    async def _consume_subscription(self, subscription: AsyncApplicationSubscription, skip_first: bool = True) -> None:
+        checkpoint_name = self.create_checkpoint_name(follower_name=self.name, leader_name=subscription.application_name)
+        while subscription.running:
+            application_event = await subscription.next_event()
+
+            # Skip first event
+            if skip_first:
+                logger.info(f'Skipping first event in subscription: {application_event}')
+                skip_first = False
+                continue
+
+            await self.process_event(event=application_event.domain_event)
+            await self.checkpoint_store.set_checkpoint(name=checkpoint_name, value=application_event.commit_position)
+
+    @staticmethod
+    def create_checkpoint_name(follower_name: str, leader_name: str) -> str:
+        return f'{follower_name}->{leader_name}'
+
+    async def stop(self) -> None:
+        for subscription in self._subscriptions:
+            await subscription.stop()
+
+        await asyncio.gather(*self._tasks)
+
+    async def subscribe_to(self, app: Leader) -> None:
+        if not isinstance(app, Leader):
+            raise TypeError(f'Invalid application type, expected <Leader>, got {type(app)}')
+
+        application_names = [subscription.application_name for subscription in self._subscriptions]
+        if app.name in application_names:
+            raise ValueError(f'Already subscribed to {app.name}')  # TODO - change exception type
+
+        checkpoint_name = self.create_checkpoint_name(follower_name=self.name, leader_name=app.name)
+        checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
+
+        # Skip first event if there is checkpoint, because it was already processed
+        if not checkpoint:
+            skip_first = False
+        else:
+            skip_first = True
+
+        subscription = await app.create_application_subscription(subscription_id=str(uuid4()), start_position=checkpoint)
+        task = asyncio.create_task(self._consume_subscription(subscription, skip_first=skip_first))
+        self._tasks.append(task)
+
+
+class Application(Leader, Follower):
+    def __init__(self, event_store: AsyncEventStore, checkpoint_store: CheckpointStore, mapper: Mapper):
+        Leader.__init__(self, event_store=event_store, mapper=mapper)
+        Follower.__init__(self, checkpoint_store=checkpoint_store)
+
+        self._repository = AsyncRepository(
+            event_store=event_store,
+            stream_name_policy=ApplicationStreamNamePolicy(application_name=self.get_name()),  # TODO - hardcoded to simplify concept
+            mapper=mapper
+        )
+
+    @property
+    def repository(self) -> AsyncRepository:
+        return self._repository
 
 
 class Projection(Follower):

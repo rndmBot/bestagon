@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Type
 
+from bestagon.core.aggregate import Aggregate
 from bestagon.core.event_store import StreamEvent, NewStreamEvent
-from bestagon.domain.aggregate import Aggregate
-from bestagon.domain.domain_event import DomainEvent
+from bestagon.core.message import DomainEvent
 
 
 class Mapper(ABC):
