@@ -1,5 +1,5 @@
 import logging
-from abc import ABC
+from abc import ABC, abstractmethod
 
 from bestagon.core.message_bus import AsyncCommandBus, AsyncQueryBus
 
@@ -25,3 +25,11 @@ class EventSourcedSystem(ABC):
     @property
     def query_bus(self) -> AsyncQueryBus:
         return self._query_bus
+
+    @abstractmethod
+    def initialize(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def shutdown(self) -> None:
+        raise NotImplementedError

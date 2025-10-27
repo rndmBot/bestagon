@@ -7,8 +7,6 @@ from bestagon.core.message import DomainEvent
 
 
 class Mapper(ABC):
-    # TODO - IDEA - add TypeMap singleton class that will hold global map of event types
-
     @abstractmethod
     def get_aggregate_class(self, aggregate_type: str) -> Type[Aggregate]:
         raise NotImplementedError
