@@ -66,8 +66,6 @@ class AsyncRepository:
         return aggregate
 
     async def save(self, aggregate: Aggregate) -> None:
-        logger.debug(f'Saving aggregate {aggregate.id}...')
-
         if not aggregate.pending_events:
             return
 
@@ -87,5 +85,3 @@ class AsyncRepository:
         stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate.get_type(), aggregate_id=aggregate.id)
         await self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
         aggregate.clear_events()
-
-        logger.debug(f'Aggregate {aggregate.id} saved in event store: {stream_name}')

@@ -64,7 +64,7 @@ class Follower(EventProcessor):
         super().__init__()
         self._checkpoint_store = checkpoint_store
         self._subscriptions: List[AsyncApplicationSubscription] = list()
-        self._tasks = list()
+        self._tasks: List[asyncio.Task] = list()
 
     @property
     def checkpoint_store(self) -> CheckpointStore:
@@ -89,10 +89,11 @@ class Follower(EventProcessor):
         for subscription in self._subscriptions:
             await subscription.stop()
 
-        await asyncio.gather(*self._tasks)
+        for task in self._tasks:
+            task.cancel()
 
     async def subscribe_to(self, app: Leader) -> None:
-        logger.info(f'{self.name} subscribing to application {app.name}...')
+        # TODO - ACHTUNG BUG - allows subscription to the same application, should lock the execution somehow
 
         if not isinstance(app, Leader):
             raise TypeError(f'Invalid application type, expected <Leader>, got {type(app)}')
