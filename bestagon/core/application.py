@@ -74,17 +74,10 @@ class Follower(EventProcessor):
     def subscriptions(self) -> Tuple[AsyncApplicationSubscription, ...]:
         return tuple(self._subscriptions)
 
-    async def _consume_subscription(self, subscription: AsyncApplicationSubscription, skip_first: bool = True) -> None:
+    async def _consume_subscription(self, subscription: AsyncApplicationSubscription) -> None:
         checkpoint_name = self.create_checkpoint_name(follower_name=self.name, leader_name=subscription.application_name)
         while subscription.running:
             application_event = await subscription.next_event()
-
-            # Skip first event
-            if skip_first:
-                logger.info(f'Skipping first event in subscription: {application_event}')
-                skip_first = False
-                continue
-
             await self.process_event(event=application_event.domain_event)
             await self.checkpoint_store.set_checkpoint(name=checkpoint_name, value=application_event.commit_position)
 
@@ -99,6 +92,8 @@ class Follower(EventProcessor):
         await asyncio.gather(*self._tasks)
 
     async def subscribe_to(self, app: Leader) -> None:
+        logger.info(f'{self.name} subscribing to application {app.name}...')
+
         if not isinstance(app, Leader):
             raise TypeError(f'Invalid application type, expected <Leader>, got {type(app)}')
 
@@ -108,16 +103,11 @@ class Follower(EventProcessor):
 
         checkpoint_name = self.create_checkpoint_name(follower_name=self.name, leader_name=app.name)
         checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
-
-        # Skip first event if there is checkpoint, because it was already processed
-        if not checkpoint:
-            skip_first = False
-        else:
-            skip_first = True
-
         subscription = await app.create_application_subscription(subscription_id=str(uuid4()), start_position=checkpoint)
-        task = asyncio.create_task(self._consume_subscription(subscription, skip_first=skip_first))
+        task = asyncio.create_task(self._consume_subscription(subscription))
         self._tasks.append(task)
+
+        logger.info(f'{self.name} subscribed to application {app.name}')
 
 
 class Application(Leader, Follower):
