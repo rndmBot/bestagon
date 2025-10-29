@@ -84,6 +84,7 @@ class Follower(EventProcessor):
 
     @staticmethod
     def create_checkpoint_name(follower_name: str, leader_name: str) -> str:
+        # TODO - here??? ORLY???
         return f'{follower_name}->{leader_name}'
 
     async def stop(self) -> None:
@@ -136,3 +137,6 @@ class Projection(Follower):
     def drop(self) -> None:
         """There should be functionality to drop projection and rebuild it from scratch"""
         raise NotImplementedError
+
+    async def initialize(self) -> None:
+        pass
