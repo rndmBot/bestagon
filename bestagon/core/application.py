@@ -65,6 +65,7 @@ class Follower(EventProcessor):
         self._checkpoint_store = checkpoint_store
         self._subscriptions: List[AsyncApplicationSubscription] = list()
         self._tasks: List[asyncio.Task] = list()
+        self._lock = asyncio.Lock()
 
     @property
     def checkpoint_store(self) -> CheckpointStore:
@@ -93,22 +94,22 @@ class Follower(EventProcessor):
             task.cancel()
 
     async def subscribe_to(self, app: Leader) -> None:
-        # TODO - ACHTUNG BUG - allows subscription to the same application, should lock the execution somehow
-
         if not isinstance(app, Leader):
             raise TypeError(f'Invalid application type, expected <Leader>, got {type(app)}')
 
-        application_names = [subscription.application_name for subscription in self._subscriptions]
-        if app.name in application_names:
-            raise ValueError(f'Already subscribed to {app.name}')  # TODO - change exception type
+        async with self._lock:
+            application_names = [subscription.application_name for subscription in self._subscriptions]
+            if app.name in application_names:
+                raise ValueError(f'Already subscribed to {app.name}')  # TODO - change exception type
 
-        checkpoint_name = self.create_checkpoint_name(follower_name=self.name, leader_name=app.name)
-        checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
-        subscription = await app.create_application_subscription(subscription_id=str(uuid4()), start_position=checkpoint)
-        task = asyncio.create_task(self._consume_subscription(subscription))
-        self._tasks.append(task)
+            checkpoint_name = self.create_checkpoint_name(follower_name=self.name, leader_name=app.name)
+            checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
+            subscription = await app.create_application_subscription(subscription_id=str(uuid4()), start_position=checkpoint)
+            self._subscriptions.append(subscription)
+            task = asyncio.create_task(self._consume_subscription(subscription))
+            self._tasks.append(task)
 
-        logger.info(f'{self.name} subscribed to application {app.name}')
+            logger.info(f'{self.name} subscribed to application {app.name}')
 
 
 class Application(Leader, Follower):
