@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 
 
 class CheckpointStore(ABC):
-    # TODO - ORLY - add clear method
+    # TODO - add method to retreive all checkpoint names for specified application
+    # TODO - add method to clear all checkpoints for specified application
 
     @abstractmethod
     async def initialize(self) -> None:

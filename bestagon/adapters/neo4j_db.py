@@ -1,6 +1,11 @@
+import logging
+
 import neo4j
 
 from bestagon.core.checkpoint_store import CheckpointStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class Neo4jCheckpointStore(CheckpointStore):
@@ -57,3 +62,4 @@ class Neo4jCheckpointStore(CheckpointStore):
                 name=name,
                 value=value
             )
+        logger.debug(f'New checkpoint set for {name}: {value}')
