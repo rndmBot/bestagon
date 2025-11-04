@@ -14,15 +14,7 @@ class AggregateVersionError(BestagonError):
     pass
 
 
-class ApplicationError(BestagonError):
-    pass
-
-
 class IntegrityError(BestagonError):
-    pass
-
-
-class InvalidPositionError(BestagonError):
     pass
 
 
@@ -34,5 +26,9 @@ class HandlerAlreadyRegistered(BestagonError):
     pass
 
 
-class ValidationError(BestagonError):
+class TypeNotRegisteredError(BestagonError):
+    pass
+
+
+class TypeAlreadyRegisteredError(BestagonError):
     pass

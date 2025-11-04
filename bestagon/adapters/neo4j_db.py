@@ -13,6 +13,16 @@ class Neo4jCheckpointStore(CheckpointStore):
         self.driver = driver
         self.database_name = database_name
 
+    async def delete_checkpoint(self, name: str) -> None:
+        cypher = '''
+        MATCH (c:Checkpoint {name: $name})
+        DETACH DELETE c
+        '''
+
+        async with self.driver.session(default_access_mode=neo4j.WRITE_ACCESS, database=self.database_name) as sess:
+            await sess.run(cypher, name=name)
+        logger.info(f'Checkpoint {name} deleted')
+
     async def get_checkpoint(self, name: str) -> int:
         cypher = '''
         MATCH (c:Checkpoint {name: $name})
