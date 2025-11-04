@@ -7,7 +7,6 @@ from uuid import uuid4
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_store import AsyncEventStore
-from bestagon.core.mapper import Mapper
 from bestagon.core.message import DomainEvent
 from bestagon.core.policy import ApplicationStreamNamePolicy
 from bestagon.core.repository import AsyncRepository
@@ -32,17 +31,12 @@ class EventProcessor(ABC):
 
 
 class Leader(EventProcessor):
-    def __init__(self, event_store: AsyncEventStore, mapper: Mapper):
+    def __init__(self, event_store: AsyncEventStore):
         self._event_store = event_store
-        self._mapper = mapper
 
     @property
     def event_store(self) -> AsyncEventStore:
         return self._event_store
-
-    @property
-    def mapper(self) -> Mapper:
-        return self._mapper
 
     async def create_application_subscription(self, subscription_id: str, start_position: int) -> AsyncApplicationSubscription:
         event_store_subscription = await self.event_store.create_stream_subscription(
@@ -53,7 +47,6 @@ class Leader(EventProcessor):
         app_subscription = AsyncApplicationSubscription(
             subscription_id=subscription_id,
             application_name=self.name,
-            mapper=self.mapper,
             event_store_subscription=event_store_subscription
         )
         return app_subscription
@@ -113,14 +106,13 @@ class Follower(EventProcessor):
 
 
 class Application(Leader, Follower):
-    def __init__(self, event_store: AsyncEventStore, checkpoint_store: CheckpointStore, mapper: Mapper):
-        Leader.__init__(self, event_store=event_store, mapper=mapper)
+    def __init__(self, event_store: AsyncEventStore, checkpoint_store: CheckpointStore):
+        Leader.__init__(self, event_store=event_store)
         Follower.__init__(self, checkpoint_store=checkpoint_store)
 
         self._repository = AsyncRepository(
             event_store=event_store,
-            stream_name_policy=ApplicationStreamNamePolicy(application_name=self.get_name()),  # TODO - hardcoded to simplify concept
-            mapper=mapper
+            stream_name_policy=ApplicationStreamNamePolicy(application_name=self.get_name())  # TODO - hardcoded to simplify concept
         )
 
     @property

@@ -2,7 +2,7 @@ from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from bestagon.core.mapper import Mapper
+from bestagon.core.mapper import mapper
 from bestagon.core.message import ApplicationEvent
 
 if TYPE_CHECKING:
@@ -54,16 +54,9 @@ class AsyncEventStoreSubscription(AsyncSubscription):
 
 
 class AsyncApplicationSubscription(AsyncSubscription):
-    def __init__(
-            self,
-            subscription_id: str,
-            application_name: str,
-            mapper: Mapper,
-            event_store_subscription: AsyncEventStoreSubscription
-    ):
+    def __init__(self, subscription_id: str, application_name: str, event_store_subscription: AsyncEventStoreSubscription):
         super().__init__(subscription_id=subscription_id, parameters=SubscriptionParameters())
         self._application_name = application_name
-        self._mapper = mapper
         self._event_store_subscription = event_store_subscription
 
     @property
@@ -75,7 +68,7 @@ class AsyncApplicationSubscription(AsyncSubscription):
             raise StopAsyncIteration
 
         stream_event = await self._event_store_subscription.next_event()
-        domain_event = self._mapper.to_domain_event(stream_event=stream_event)
+        domain_event = mapper.to_domain_event(stream_event=stream_event)
         application_event = ApplicationEvent(
             commit_position=stream_event.commit_position,
             domain_event=domain_event
