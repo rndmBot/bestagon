@@ -34,11 +34,21 @@ class Mapper:
         raise TypeNotRegisteredError(f'No event type registered for event class: {event_class}')
 
     def register_aggregate_type(self, aggregate_class: Type[Aggregate], aggregate_type: str) -> None:
+        if not issubclass(aggregate_class, Aggregate):
+            raise TypeError(f'Invalid aggregate class type, expected <Aggregate>, got {aggregate_class}')
+        if not isinstance(aggregate_type, str):
+            raise TypeError('Aggregate class should be string')
+
         if aggregate_type in self._aggregate_class_map:
             raise TypeAlreadyRegisteredError(f'Type {aggregate_type} already registered for aggregate class {self._aggregate_class_map[aggregate_type]}')
         self._aggregate_class_map[aggregate_type] = aggregate_class
 
     def register_event_type(self, event_class: Type[DomainEvent], event_type: str) -> None:
+        if not issubclass(event_class, DomainEvent):
+            raise TypeError(f'Invalid event class type, expected <DomainEvent>, got {event_class}')
+        if not isinstance(event_type, str):
+            raise TypeError('Event type should be string')
+
         if event_type in self._event_class_map:
             raise TypeAlreadyRegisteredError(f'Type {event_type} already registered for event {self._event_class_map[event_type]}')
         self._event_class_map[event_type] = event_class
