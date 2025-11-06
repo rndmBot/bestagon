@@ -32,8 +32,10 @@ class AsyncRepository:
     async def get_by_id(self, aggregate_type: str, aggregate_id: str) -> Aggregate:
         domain_events: List[DomainEvent] = list()
         stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
-        stored_events = await self.event_store.get_stream(stream_name=stream_name)
+        if not await self.event_store.stream_exists(stream_name):
+            raise AggregateNotFoundError(f'Aggregate {aggregate_id} not found.')
 
+        stored_events = await self.event_store.get_stream(stream_name=stream_name)
         if not stored_events:
             raise AggregateNotFoundError(f'Aggregate {aggregate_id} not found.')
 

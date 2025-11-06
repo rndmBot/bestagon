@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 class AsyncCommandBus:
     # TODO - command bus can contain middleware
+    # TODO - how to automatically register command handlers
 
     def __init__(self):
         self._handler_map = dict()
@@ -43,6 +44,7 @@ class AsyncCommandBus:
 class AsyncQueryBus:
     # TODO - can contain middleware
     # TODO - there are multiple types of queries - https://docs.axoniq.io/axon-framework-reference/4.11/queries/
+    # TODO - how to automatically register query handlers
 
     def __init__(self):
         self._handler_map = dict()
