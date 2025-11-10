@@ -53,11 +53,14 @@ class Leader(EventProcessor):
 
 
 class Follower(EventProcessor):
+    # TODO - follower should provide subscribe_to_events method instead subscribe to application
+
     def __init__(self, checkpoint_store: CheckpointStore):
         super().__init__()
         self._checkpoint_store = checkpoint_store
         self._subscriptions: List[AsyncApplicationSubscription] = list()
         self._lock = asyncio.Lock()
+        self.consumer_lock = asyncio.Lock()
 
     @property
     def checkpoint_store(self) -> CheckpointStore:
@@ -68,13 +71,15 @@ class Follower(EventProcessor):
         return tuple(self._subscriptions)
 
     async def _consume_subscription(self, subscription: AsyncApplicationSubscription) -> None:
+        # TODO - ACHTUNG - possible race conditions if multiple subscriptions access one repository
         checkpoint_name = self.create_checkpoint_name(follower_name=self.name, leader_name=subscription.application_name)
         while subscription.running:
-            application_event = await subscription.next_event()
+            async with self.consumer_lock:
+                application_event = await subscription.next_event()
 
-            # TODO - ACHTUNG - dangerous, what if only one operation will be completed???
-            await self.process_event(event=application_event.domain_event)
-            await self.checkpoint_store.set_checkpoint(name=checkpoint_name, value=application_event.commit_position)
+                # TODO - ACHTUNG - dangerous, what if only one operation will be completed???
+                await self.process_event(event=application_event.domain_event)
+                await self.checkpoint_store.set_checkpoint(name=checkpoint_name, value=application_event.commit_position)
 
     @staticmethod
     def create_checkpoint_name(follower_name: str, leader_name: str) -> str:
