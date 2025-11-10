@@ -53,15 +53,10 @@ class AsyncEventStoreSubscription(AsyncSubscription):
         raise NotImplementedError
 
 
-class AsyncApplicationSubscription(AsyncSubscription):
-    def __init__(self, subscription_id: str, application_name: str, event_store_subscription: AsyncEventStoreSubscription):
+class AsyncDomainEventsSubscription(AsyncSubscription):
+    def __init__(self, subscription_id: str, event_store_subscription: AsyncEventStoreSubscription):
         super().__init__(subscription_id=subscription_id, parameters=SubscriptionParameters())
-        self._application_name = application_name
         self._event_store_subscription = event_store_subscription
-
-    @property
-    def application_name(self) -> str:
-        return self._application_name
 
     async def next_event(self) -> ApplicationEvent:
         if not self.running:

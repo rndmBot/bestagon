@@ -63,11 +63,19 @@ class AsyncEventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_stream_subscription(self, subscription_id: str, regex: str, start_position: int) -> 'AsyncEventStoreSubscription':
+    async def create_subscription(self, subscription_id: str, subscription_parameters: 'SubscriptionParameters') -> 'AsyncEventStoreSubscription':
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription(self, subscription_id: str, subscription_parameters: 'SubscriptionParameters') -> 'AsyncEventStoreSubscription':
+    async def create_subscription_to_all(self, subscription_id: str, start_position: int) -> 'AsyncEventStoreSubscription':
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_subscription_to_events(self, subscription_id: str, events: List[str], start_position: int) -> 'AsyncEventStoreSubscription':
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_subscription_to_stream(self, subscription_id: str, regex: str, start_position: int) -> 'AsyncEventStoreSubscription':
         raise NotImplementedError
 
     @abstractmethod

@@ -95,14 +95,6 @@ class AsyncKurrentDBEventStore(AsyncEventStore):
         await self.client.connect()
         logger.info('Event store connected')
 
-    async def create_stream_subscription(self, subscription_id: str, regex: str, start_position: int) -> AsyncEventStoreSubscription:
-        params = KurrentDBSubscriptionParameters(
-            commit_position=start_position,
-            filter_include=[regex],
-            filter_by_stream_name=True
-        )
-        return await self.create_subscription(subscription_id=subscription_id, subscription_parameters=params)
-
     async def create_subscription(self, subscription_id: str, subscription_parameters: KurrentDBSubscriptionParameters) -> AsyncKurrentDBSubscription:
         kdb_subscription = await self.client.subscribe_to_all(
             commit_position=subscription_parameters.commit_position,
@@ -124,6 +116,28 @@ class AsyncKurrentDBEventStore(AsyncEventStore):
         subscription = AsyncKurrentDBSubscription(subscription_id=subscription_id, parameters=subscription_parameters, kdb_subscription=kdb_subscription)
         self._subscriptions.append(subscription)
         return subscription
+
+    async def create_subscription_to_all(self, subscription_id: str, start_position: int) -> 'AsyncEventStoreSubscription':
+        params = KurrentDBSubscriptionParameters(commit_position=start_position)
+        sub = await self.create_subscription(subscription_id=subscription_id, subscription_parameters=params)
+        return sub
+
+    async def create_subscription_to_events(self, subscription_id: str, events: List[str], start_position: int) -> 'AsyncEventStoreSubscription':
+        params = KurrentDBSubscriptionParameters(
+            commit_position=start_position,
+            filter_include=events,
+            filter_by_stream_name=False
+        )
+        sub = await self.create_subscription(subscription_id=subscription_id, subscription_parameters=params)
+        return sub
+
+    async def create_subscription_to_stream(self, subscription_id: str, regex: str, start_position: int) -> AsyncEventStoreSubscription:
+        params = KurrentDBSubscriptionParameters(
+            commit_position=start_position,
+            filter_include=[regex],
+            filter_by_stream_name=True
+        )
+        return await self.create_subscription(subscription_id=subscription_id, subscription_parameters=params)
 
     async def get_stream(self, stream_name: str) -> List[StreamEvent]:
         events = await self.client.get_stream(stream_name=stream_name)

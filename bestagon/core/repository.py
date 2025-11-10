@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from itertools import pairwise
 from typing import List
@@ -6,7 +5,7 @@ from typing import List
 from bestagon.core.aggregate import Aggregate
 from bestagon.core.mapper import mapper
 from bestagon.core.message import DomainEvent
-from bestagon.core.policy import StreamNamePolicy
+from bestagon.core.policy import StreamNamePolicy, SimpleStreamNamePolicy
 from bestagon.core.event_store import AsyncEventStore
 from bestagon.exceptions import AggregateNotFoundError, IntegrityError
 
@@ -14,10 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncRepository:
-    def __init__(self, event_store: AsyncEventStore, stream_name_policy: StreamNamePolicy):
+    def __init__(self, event_store: AsyncEventStore, stream_name_policy: StreamNamePolicy = SimpleStreamNamePolicy()):
         self._event_store = event_store
         self._stream_name_policy = stream_name_policy
-        self.lock = asyncio.Lock()
 
     @property
     def event_store(self) -> AsyncEventStore:
@@ -64,21 +62,19 @@ class AsyncRepository:
         if not aggregate.pending_events:
             return
 
-        # TODO - ACHTUNG - should be reconsidered, looks like there is a race condition somewhere, thisi an attempt to find it
-        async with self.lock:
-            # Events validation - aggregate version must be monotonically increasing
-            versions = [event.metadata.aggregate_version for event in aggregate.pending_events]
-            diffs = [y - x for x, y in pairwise(versions)]
-            gapless = all([True if d == 1 else False for d in diffs])
-            if not gapless:
-                logger.debug(f'{aggregate.id}: {versions}')
-                raise IntegrityError('Invalid aggregate version: each aggregate event should have version exactly one more than previous.')
+        # Events validation - aggregate version must be monotonically increasing
+        versions = [event.metadata.aggregate_version for event in aggregate.pending_events]
+        diffs = [y - x for x, y in pairwise(versions)]
+        gapless = all([True if d == 1 else False for d in diffs])
+        if not gapless:
+            logger.debug(f'{aggregate.id}: {versions}')
+            raise IntegrityError('Invalid aggregate version: each aggregate event should have version exactly one more than previous.')
 
-            new_stored_events = list()
-            for domain_event in aggregate.pending_events:
-                new_stored_event = mapper.to_new_stream_event(domain_event=domain_event)
-                new_stored_events.append(new_stored_event)
+        new_stored_events = list()
+        for domain_event in aggregate.pending_events:
+            new_stored_event = mapper.to_new_stream_event(domain_event=domain_event)
+            new_stored_events.append(new_stored_event)
 
-            stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate.get_type(), aggregate_id=aggregate.id)
-            await self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
-            aggregate.clear_events()
+        stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate.get_type(), aggregate_id=aggregate.id)
+        await self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
+        aggregate.clear_events()
