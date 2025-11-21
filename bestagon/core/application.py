@@ -35,6 +35,9 @@ class EventProcessor(ABC):
         raise NotImplementedError
 
     async def _consume_subscription(self) -> None:
+        # TODO - rethink, maybe there is a better way to consume events???
+        # TODO - intercept asyncio.CancelledError to shutdown gracefully
+
         while self.subscription.running:
             application_event = await self.subscription.next_event()
 

@@ -38,6 +38,33 @@ class EventSourcedSystem(ABC):
     def query_bus(self) -> AsyncQueryBus:
         return self._query_bus
 
+    # TODO - concept
+    # async def add_event_processor(self, event_processor: EventProcessor) -> None:
+    #     if isinstance(event_processor, Projection):
+    #         await event_processor.initialize()
+    #
+    #     checkpoint_name = f'{event_processor.name}_subscription'  # TODO - ORLY???
+    #     checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
+    #     # TODO - ACHTUNG - currently subscribes to all, restrict subscriptions only to required events to improve performancej
+    #     es_subscription = await self.event_store.create_subscription_to_all(subscription_id=checkpoint_name, start_position=checkpoint)
+    #     de_subscription = AsyncDomainEventsSubscription(subscription_id=es_subscription.subscription_id, event_store_subscription=es_subscription)
+    #
+    #     task = event_processor.set_subscription(de_subscription)
+    #     task.add_done_callback(self._when_subscription_task_done)
+    #     self.subscription_tasks.append(task)
+    #     logger.info(f'Event processor {event_processor.name} with subscription {checkpoint_name} added')
+
+    # TODO - concept
+    # def _when_subscription_task_done(self, task: asyncio.Task) -> None:
+    #     try:
+    #         result = task.result()
+    #         logger.info(f'Task {task.get_name()} finished with result: {result}')
+    #     except StopAsyncIteration:
+    #         logger.info(f'Task {task.get_name()} finished: subscription stop')
+    #     except Exception as e:
+    #         asyncio.create_task(self.shutdown())
+    #         raise e
+
     @abstractmethod
     def initialize(self) -> None:
         raise NotImplementedError
