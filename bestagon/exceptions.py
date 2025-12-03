@@ -1,26 +1,34 @@
-class AggregateNotFoundError(Exception):
+class BestagonError(Exception):
     pass
 
 
-class AggregateIDMismatch(Exception):
+class AggregateNotFoundError(BestagonError):
     pass
 
 
-class AggregateVersionError(Exception):
+class AggregateIDMismatch(BestagonError):
     pass
 
 
-class ApplicationError(Exception):
+class AggregateVersionError(BestagonError):
     pass
 
 
-class IntegrityError(Exception):
+class IntegrityError(BestagonError):
     pass
 
 
-class InvalidPositionError(Exception):
+class HandlerNotFound(BestagonError):
     pass
 
 
-class ValidationError(Exception):
+class HandlerAlreadyRegistered(BestagonError):
+    pass
+
+
+class TypeNotRegisteredError(BestagonError):
+    pass
+
+
+class TypeAlreadyRegisteredError(BestagonError):
     pass

@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from itertools import pairwise
-from typing import List
+from typing import List, Tuple, TYPE_CHECKING
 
-from bestagon.exceptions import IntegrityError
+if TYPE_CHECKING:
+    from bestagon.core.subscription import AsyncEventStoreSubscription, SubscriptionParameters
 
 
 @dataclass(frozen=True)
@@ -42,51 +42,46 @@ class StreamEvent:
         return NotImplemented
 
 
-class EventStore(ABC):
-    # TODO - there are two ways to subscribe to events in event store - by event type and by stream name, event store should support both ways
-    # TODO - IDEA - define EventReader and EventWriter interfaces, EventStore should inherit from both
-    # TODO - Subscription by event type - EventSubscription
-    # TODO - Subscription by stream name - StreamSubscription
-    # TODO - subscription ideas https://eventuous.dev/docs/infra/esdb/
+class AsyncEventStore(ABC):
+    def __init__(self):
+        self._subscriptions: List['AsyncEventStoreSubscription'] = list()
 
-    def __contains__(self, item):
-        return self.stream_exists(stream_name=item)
+    @property
+    def subscriptions(self) -> Tuple['AsyncEventStoreSubscription', ...]:
+        return tuple(self._subscriptions)
 
     @abstractmethod
-    def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
-        """
-        Adds new events to specified event stream.
-        ACHTUNG - validate events before recording them into the event store.
-        """
-        raise NotImplementedError
-
-    @staticmethod
-    def validate_new_events(events: List[NewStreamEvent]) -> None:
-        """
-        Events should have monotonicaly increasing stream position, ex: 0, 1, 2, 3
-        Any gaps or out of order events are not allowed.
-        """
-        versions = [event.stream_position for event in events]
-        diffs = [y - x for x, y in pairwise(versions)]
-        gapless = all([True if d == 1 else False for d in diffs])
-        if not gapless:
-            raise IntegrityError('Events must be gapless to record in event store.')
-
-    @abstractmethod
-    def close(self) -> None:
+    async def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def get_events(self, regex_list: List[str], start_position: int, limit: int) -> List[StreamEvent]:
-        """Allows to retreive events from specific streams specified by regex, strating from specific position."""
+    async def close(self) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def get_stream(self, stream_name: str) -> List[StreamEvent]:
-        """Returns all events from a single stream."""
+    async def connect(self) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def stream_exists(self, stream_name: str) -> bool:
-        """Returns True if specified stream exists in event store."""
+    async def create_subscription(self, subscription_id: str, subscription_parameters: 'SubscriptionParameters') -> 'AsyncEventStoreSubscription':
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_subscription_to_all(self, subscription_id: str, start_position: int) -> 'AsyncEventStoreSubscription':
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_subscription_to_events(self, subscription_id: str, events: List[str], start_position: int) -> 'AsyncEventStoreSubscription':
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_subscription_to_stream(self, subscription_id: str, regex: str, start_position: int) -> 'AsyncEventStoreSubscription':
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_stream(self, stream_name: str) -> List[StreamEvent]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def stream_exists(self, stream_name: str) -> bool:
         raise NotImplementedError

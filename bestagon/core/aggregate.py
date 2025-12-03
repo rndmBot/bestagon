@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Tuple
 
+from bestagon.core.message import DomainEvent, Created
 from bestagon.exceptions import AggregateIDMismatch, AggregateVersionError
-from bestagon.domain.domain_event import DomainEvent, Created
 
 
 class Aggregate(ABC):
@@ -90,7 +90,6 @@ class Aggregate(ABC):
     @abstractmethod
     def get_type() -> str:
         """Used for persistence in event store."""
-        # TODO - ORLY???
         raise NotImplementedError
 
     def mutate(self, event: DomainEvent) -> None:
