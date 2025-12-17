@@ -10,7 +10,6 @@ from bestagon.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredErr
 
 class Mapper:
     # TODO - ORLY - add possibility to pass custom serializer???
-    # TODO - how to register Aggregate and Event types automatically
 
     def __init__(self):
         self._aggregate_class_map: Dict[str, Type[Aggregate]] = dict()
@@ -79,3 +78,23 @@ class Mapper:
 
 
 mapper = Mapper()
+
+
+def register_aggregate_type():
+    """Aggregate decorator, automatically registers aggregate type"""
+
+    def decorator(cls: Type[Aggregate]) -> Type[Aggregate]:
+        mapper.register_aggregate_type(aggregate_class=cls, aggregate_type=cls.get_aggregate_type())
+        return cls
+
+    return decorator
+
+
+def register_event_type(event_type: str):
+    """Automatically registers event type"""
+
+    def decorator(cls: Type[DomainEvent]) -> Type[DomainEvent]:
+        mapper.register_event_type(event_class=cls, event_type=event_type)
+        return cls
+
+    return decorator

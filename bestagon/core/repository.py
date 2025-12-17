@@ -5,7 +5,6 @@ from typing import List
 from bestagon.core.aggregate import Aggregate
 from bestagon.core.mapper import mapper
 from bestagon.core.message import DomainEvent
-from bestagon.core.policy import StreamNamePolicy, SimpleStreamNamePolicy
 from bestagon.core.event_store import AsyncEventStore
 from bestagon.exceptions import AggregateNotFoundError, IntegrityError
 
@@ -13,25 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncRepository:
-    def __init__(self, event_store: AsyncEventStore, stream_name_policy: StreamNamePolicy = SimpleStreamNamePolicy()):
+    def __init__(self, event_store: AsyncEventStore):
         self._event_store = event_store
-        self._stream_name_policy = stream_name_policy
 
     @property
     def event_store(self) -> AsyncEventStore:
         return self._event_store
 
-    @property
-    def stream_name_policy(self) -> StreamNamePolicy:
-        return self._stream_name_policy
+    @staticmethod
+    def _create_stream_name(aggregate_type: str, aggregate_id: str) -> str:
+        return f'{aggregate_type}-{aggregate_id}'
 
     async def contains(self, aggregate_type: str, aggregate_id: str) -> bool:
-        stream_id = self.stream_name_policy.create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
+        stream_id = self._create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
         return await self.event_store.stream_exists(stream_name=stream_id)
 
     async def get_by_id(self, aggregate_type: str, aggregate_id: str) -> Aggregate:
         domain_events: List[DomainEvent] = list()
-        stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
+        stream_name = self._create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
         if not await self.event_store.stream_exists(stream_name):
             raise AggregateNotFoundError(f'Aggregate {aggregate_id} not found.')
 
@@ -67,7 +65,7 @@ class AsyncRepository:
         diffs = [y - x for x, y in pairwise(versions)]
         gapless = all([True if d == 1 else False for d in diffs])
         if not gapless:
-            logger.debug(f'{aggregate.id}: {versions}')
+            logger.debug(f'{aggregate.aggregate_id}: {versions}')
             raise IntegrityError('Invalid aggregate version: each aggregate event should have version exactly one more than previous.')
 
         new_stored_events = list()
@@ -75,6 +73,6 @@ class AsyncRepository:
             new_stored_event = mapper.to_new_stream_event(domain_event=domain_event)
             new_stored_events.append(new_stored_event)
 
-        stream_name = self.stream_name_policy.create_stream_name(aggregate_type=aggregate.get_type(), aggregate_id=aggregate.id)
+        stream_name = self._create_stream_name(aggregate_type=aggregate.get_aggregate_type(), aggregate_id=aggregate.aggregate_id)
         await self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
         aggregate.clear_events()
