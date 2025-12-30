@@ -3,8 +3,7 @@ from dataclasses import asdict
 from typing import Type, Dict
 
 from bestagon.core.aggregate import Aggregate
-from bestagon.core.event_store import StreamEvent, NewStreamEvent
-from bestagon.core.message import DomainEvent, DomainEventMetadata
+from bestagon.core.message import DomainEvent, DomainEventMetadata, NewStreamEvent, StreamEvent
 from bestagon.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError
 
 

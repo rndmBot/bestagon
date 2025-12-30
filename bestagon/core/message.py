@@ -62,3 +62,41 @@ class ApplicationEvent:
     # TODO - ORLY - inherit from Message???
     commit_position: int
     domain_event: DomainEvent
+
+
+@dataclass(frozen=True)
+class NewStreamEvent:
+    """New event to store in event store"""
+    stream_position: int  # Position in aggreate sequence
+    event_type: str
+    payload: bytes
+    metadata: bytes
+
+
+@dataclass(frozen=True)
+class StreamEvent:
+    """Event retreived from EventStore"""
+    stream_name: str
+    stream_position: int  # Position in aggreate sequence
+    commit_position: int  # Position in event store sequence
+    event_type: str
+    payload: bytes
+    metadata: bytes
+
+    def __eq__(self, other):
+        # TODO - ORLY???
+        if isinstance(other, StreamEvent):
+            eq = all(
+                [
+                    self.stream_name == other.stream_name,
+                    self.stream_position == other.stream_position
+                ]
+            )
+            return eq
+        return NotImplemented
+
+    def __lt__(self, other):
+        # TODO - ORLY???
+        if isinstance(other, StreamEvent):
+            return self.stream_position < other.stream_position
+        return NotImplemented

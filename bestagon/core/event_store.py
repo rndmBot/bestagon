@@ -1,47 +1,12 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Any, TYPE_CHECKING
 
 from bestagon.core.mapper import mapper
 from bestagon.core.message import ApplicationEvent
 
-
-@dataclass(frozen=True)
-class NewStreamEvent:
-    """New event to store in event store"""
-    stream_position: int  # Position in aggreate sequence
-    event_type: str
-    payload: bytes
-    metadata: bytes
-
-
-@dataclass(frozen=True)
-class StreamEvent:
-    """Event retreived from EventStore"""
-    stream_name: str
-    stream_position: int  # Position in aggreate sequence
-    commit_position: int  # Position in event store sequence
-    event_type: str
-    payload: bytes
-    metadata: bytes
-
-    def __eq__(self, other):
-        # TODO - ORLY???
-        if isinstance(other, StreamEvent):
-            eq = all(
-                [
-                    self.stream_name == other.stream_name,
-                    self.stream_position == other.stream_position
-                ]
-            )
-            return eq
-        return NotImplemented
-
-    def __lt__(self, other):
-        # TODO - ORLY???
-        if isinstance(other, StreamEvent):
-            return self.stream_position < other.stream_position
-        return NotImplemented
+if TYPE_CHECKING:
+    from bestagon.core.message import NewStreamEvent, StreamEvent
 
 
 @dataclass(frozen=True)
@@ -83,7 +48,7 @@ class AsyncSubscription(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def next_event(self) -> any:
+    async def next_event(self) -> Any:
         raise NotImplementedError
 
 
@@ -124,7 +89,7 @@ class AsyncEventStore(ABC):
         return tuple(self._subscriptions)
 
     @abstractmethod
-    async def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
+    async def append_events(self, stream_name: str, events: List['NewStreamEvent']) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -152,7 +117,7 @@ class AsyncEventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_stream(self, stream_name: str) -> List[StreamEvent]:
+    async def get_stream(self, stream_name: str) -> List['StreamEvent']:
         raise NotImplementedError
 
     @abstractmethod
