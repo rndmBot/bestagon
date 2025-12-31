@@ -12,8 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class EventProcessor(ABC):
-    def __init__(self, name: str, checkpoint_store: CheckpointStore):
-        self._name = name
+    def __init__(self, checkpoint_store: CheckpointStore):
         self._checkpoint_store = checkpoint_store
         self._subscription = None
 
@@ -23,7 +22,7 @@ class EventProcessor(ABC):
 
     @property
     def name(self) -> str:
-        return self._name
+        return self.get_name()
 
     @property
     def subscription(self) -> AsyncDomainEventsSubscription:
@@ -44,6 +43,10 @@ class EventProcessor(ABC):
             # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executet in a single transaction (how??? there are no Trasactions in event sourcing)
             await self.process_event(event=application_event.domain_event)
             await self.checkpoint_store.set_checkpoint(name=self.subscription.subscription_id, value=application_event.commit_position)
+
+    @abstractmethod
+    def get_name(self) -> str:
+        raise NotImplementedError
 
     def set_subscription(self, subscription: AsyncDomainEventsSubscription) -> asyncio.Task:
         """Only one subscription currently allowed"""
@@ -67,8 +70,8 @@ class Application(EventProcessor):
     Application is the place where you implement your use cases, starting from simple things like creation of aggregates and ending with complex cases which can involve
     interaction between multiple aggregates.
     """
-    def __init__(self, name: str, event_store: AsyncEventStore, checkpoint_store: CheckpointStore):
-        super().__init__(name=name, checkpoint_store=checkpoint_store)
+    def __init__(self, event_store: AsyncEventStore, checkpoint_store: CheckpointStore):
+        super().__init__(checkpoint_store=checkpoint_store)
         self._repository = AsyncRepository(event_store=event_store)
 
     @property

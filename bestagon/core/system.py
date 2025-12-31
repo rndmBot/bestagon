@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List
 
-from bestagon.core.application import Application, Projection
+from bestagon.core.event_processor import Application, Projection
 from bestagon.core.message_bus import AsyncCommandBus, AsyncQueryBus
 
 
