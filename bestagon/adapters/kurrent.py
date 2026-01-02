@@ -8,7 +8,8 @@ from kurrentdbclient import StreamState, NewEvent, DEFAULT_EXCLUDE_FILTER, Async
 from kurrentdbclient.common import DEFAULT_WINDOW_SIZE, DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER
 from kurrentdbclient.exceptions import NotFoundError
 
-from bestagon.core.event_store import StreamEvent, AsyncEventStore, NewStreamEvent, SubscriptionParameters, AsyncEventStoreSubscription
+from bestagon.core.event_store import AsyncEventStore, SubscriptionParameters, AsyncEventStoreSubscription
+from bestagon.core.message import StreamEvent, NewStreamEvent
 from bestagon.exceptions import IntegrityError
 
 

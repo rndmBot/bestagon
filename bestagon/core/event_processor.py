@@ -51,6 +51,8 @@ class EventProcessor(ABC):
     def set_subscription(self, subscription: AsyncDomainEventsSubscription) -> asyncio.Task:
         """Only one subscription currently allowed"""
         # TODO - refactor to handle multiple subscriptions
+        # TODO - there should be another way to add subscriptions, for example 'add_subscription'
+
         if self.subscription is not None:
             raise ValueError(f'Failed to set subscription for {self.name} - only one subspcription can be set for event processor.')
         self._subscription = subscription

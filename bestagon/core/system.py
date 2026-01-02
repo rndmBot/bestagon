@@ -16,6 +16,8 @@ class EventSourcedSystem(ABC):
     # TODO - how to automatically register command handlers???
     # TODO - how to automatically register query handlers???
 
+    # TODO - hide comand bus and query bus under 'execute_command' and 'execute_query' methods
+
     def __init__(self):
         self._command_bus = AsyncCommandBus()
         self._query_bus = AsyncQueryBus()
