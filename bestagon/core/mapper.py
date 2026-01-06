@@ -1,10 +1,10 @@
 import json
 from dataclasses import asdict
-from typing import Type, Dict
+from typing import Type, Dict, Callable
 
 from bestagon.core.aggregate import Aggregate
-from bestagon.core.message import DomainEvent, DomainEventMetadata, NewStreamEvent, StreamEvent
-from bestagon.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError
+from bestagon.core.message import DomainEvent, DomainEventMetadata, NewStreamEvent, StreamEvent, Query, Command
+from bestagon.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError, HandlerAlreadyRegistered
 
 
 class Mapper:
@@ -15,11 +15,18 @@ class Mapper:
 
         self._event_class_map: Dict[str, Type[DomainEvent]] = dict()
         self._event_type_map: Dict[Type[DomainEvent], str] = dict()
+        self._query_handler_map: Dict[Type[Query], Callable] = dict()
+        self._command_handler_map: Dict[Type[Command], Callable] = dict()
 
     def get_aggregate_class(self, aggregate_type: str) -> Type[Aggregate]:
         if aggregate_type in self._aggregate_class_map:
             return self._aggregate_class_map[aggregate_type]
         raise TypeNotRegisteredError(f'No aggregate class registered for aggregate type: {aggregate_type}')
+
+    def get_command_handler(self, command_type: Type[Command]) -> Callable:
+        if command_type not in self._command_handler_map:
+            raise TypeNotRegisteredError(f'No command handler registered for command {command_type}')
+        return self._command_handler_map[command_type]
 
     def get_event_class(self, event_type: str) -> Type[DomainEvent]:
         if event_type in self._event_class_map:
@@ -30,6 +37,11 @@ class Mapper:
         if event_class in self._event_type_map:
             return self._event_type_map[event_class]
         raise TypeNotRegisteredError(f'No event type registered for event class: {event_class}')
+
+    def get_query_handler(self, query_type: Type[Query]) -> Callable:
+        if query_type not in self._query_handler_map:
+            raise TypeNotRegisteredError(f'No query handler registered for query {query_type}')
+        return self._query_handler_map[query_type]
 
     def register_aggregate_type(self, aggregate_class: Type[Aggregate], aggregate_type: str) -> None:
         if not issubclass(aggregate_class, Aggregate):
@@ -51,6 +63,20 @@ class Mapper:
             raise TypeAlreadyRegisteredError(f'Type {event_type} already registered for event {self._event_class_map[event_type]}')
         self._event_class_map[event_type] = event_class
         self._event_type_map[event_class] = event_type
+
+    def register_command_handler(self, command_type: Type[Command], handler: Callable) -> None:
+        if command_type in self._command_handler_map:
+            raise HandlerAlreadyRegistered(f'Command handler already registered for command {command_type}')
+        if not issubclass(command_type, Command):
+            raise TypeError(f'Invalid command type {command_type}')
+        self._command_handler_map[command_type] = handler
+
+    def register_query_handler(self, query_type: Type[Query], handler: Callable) -> None:
+        if query_type in self._query_handler_map:
+            raise TypeError(f'Handler for query {query_type} is already registered')
+        if not issubclass(query_type, Query):
+            raise TypeError(f'Invalid query type {query_type}')
+        self._query_handler_map[query_type] = handler
 
     def to_domain_event(self, stream_event: StreamEvent) -> DomainEvent:
         # TODO - Metadata class is hardcoded, rethink the concept - is there a possibility to use another class for metadata???
@@ -77,6 +103,14 @@ class Mapper:
 
 
 mapper = Mapper()
+
+
+# TODO - command hadler decorator
+
+def query_handler(func: Callable, query: Query) -> Callable:
+    # TODO - zapili
+    def inner(fn):
+        pass
 
 
 def register_aggregate_type():
