@@ -5,18 +5,18 @@ from typing import List
 from bestagon.core.aggregate import Aggregate
 from bestagon.core.mapper import mapper
 from bestagon.core.message import DomainEvent
-from bestagon.core.event_store import AsyncEventStore
+from bestagon.core.event_store import EventStore
 from bestagon.exceptions import AggregateNotFoundError, IntegrityError
 
 logger = logging.getLogger(__name__)
 
 
 class AsyncRepository:
-    def __init__(self, event_store: AsyncEventStore):
+    def __init__(self, event_store: EventStore):
         self._event_store = event_store
 
     @property
-    def event_store(self) -> AsyncEventStore:
+    def event_store(self) -> EventStore:
         return self._event_store
 
     @staticmethod

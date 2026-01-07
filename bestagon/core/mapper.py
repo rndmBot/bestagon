@@ -105,29 +105,29 @@ class Mapper:
 mapper = Mapper()
 
 
-# TODO - command hadler decorator
+def command_handler(command_type: Type[Command]):
+    def decorator(fn):
+        mapper.register_command_handler(command_type=command_type, handler=fn)
+        return fn
+    return decorator
 
-def query_handler(func: Callable, query: Query) -> Callable:
-    # TODO - zapili
-    def inner(fn):
-        pass
+
+def query_handler(query_type: Type[Query]):
+    def decorator(fn):
+        mapper.register_query_handler(query_type=query_type, handler=fn)
+        return fn
+    return decorator
 
 
 def register_aggregate_type():
-    """Aggregate decorator, automatically registers aggregate type"""
-
     def decorator(cls: Type[Aggregate]) -> Type[Aggregate]:
         mapper.register_aggregate_type(aggregate_class=cls, aggregate_type=cls.get_aggregate_type())
         return cls
-
     return decorator
 
 
 def register_event_type(event_type: str):
-    """Automatically registers event type"""
-
     def decorator(cls: Type[DomainEvent]) -> Type[DomainEvent]:
         mapper.register_event_type(event_class=cls, event_type=event_type)
         return cls
-
     return decorator

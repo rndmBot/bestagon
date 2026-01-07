@@ -4,7 +4,7 @@ from abc import abstractmethod, ABC
 
 
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.event_store import AsyncEventStore, AsyncDomainEventsSubscription
+from bestagon.core.event_store import EventStore, ApplicationSubscription
 from bestagon.core.message import DomainEvent
 from bestagon.core.repository import AsyncRepository
 
@@ -25,7 +25,7 @@ class EventProcessor(ABC):
         return self.get_name()
 
     @property
-    def subscription(self) -> AsyncDomainEventsSubscription:
+    def subscription(self) -> ApplicationSubscription:
         return self._subscription
 
     @abstractmethod
@@ -40,7 +40,7 @@ class EventProcessor(ABC):
         while self.subscription.running:
             application_event = await self.subscription.next_event()
 
-            # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executet in a single transaction (how??? there are no Trasactions in event sourcing)
+            # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executed in a single transaction (how??? there are no Trasactions in event sourcing)
             await self.process_event(event=application_event.domain_event)
             await self.checkpoint_store.set_checkpoint(name=self.subscription.subscription_id, value=application_event.commit_position)
 
@@ -48,7 +48,7 @@ class EventProcessor(ABC):
     def get_name(self) -> str:
         raise NotImplementedError
 
-    def set_subscription(self, subscription: AsyncDomainEventsSubscription) -> asyncio.Task:
+    def set_subscription(self, subscription: ApplicationSubscription) -> asyncio.Task:
         """Only one subscription currently allowed"""
         # TODO - refactor to handle multiple subscriptions
         # TODO - there should be another way to add subscriptions, for example 'add_subscription'
@@ -72,7 +72,7 @@ class Application(EventProcessor):
     Application is the place where you implement your use cases, starting from simple things like creation of aggregates and ending with complex cases which can involve
     interaction between multiple aggregates.
     """
-    def __init__(self, event_store: AsyncEventStore, checkpoint_store: CheckpointStore):
+    def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         super().__init__(checkpoint_store=checkpoint_store)
         self._repository = AsyncRepository(event_store=event_store)
 

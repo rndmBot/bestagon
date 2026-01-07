@@ -14,7 +14,7 @@ class SubscriptionParameters:
     pass
 
 
-class AsyncSubscription(ABC):
+class Subscription(ABC):
     def __init__(self, subscription_id: str, parameters: SubscriptionParameters):
         self._subscription_id = subscription_id
         self._parameters = parameters
@@ -27,7 +27,7 @@ class AsyncSubscription(ABC):
         return await self.next_event()
 
     def __eq__(self, other):
-        if isinstance(other, AsyncSubscription):
+        if isinstance(other, Subscription):
             return self.subscription_id == other.subscription_id
         return NotImplemented
 
@@ -52,14 +52,14 @@ class AsyncSubscription(ABC):
         raise NotImplementedError
 
 
-class AsyncEventStoreSubscription(AsyncSubscription):
+class EventStoreSubscription(Subscription):
     @abstractmethod
     async def next_event(self) -> 'StreamEvent':
         raise NotImplementedError
 
 
-class AsyncDomainEventsSubscription(AsyncSubscription):
-    def __init__(self, subscription_id: str, event_store_subscription: AsyncEventStoreSubscription):
+class ApplicationSubscription(Subscription):
+    def __init__(self, subscription_id: str, event_store_subscription: EventStoreSubscription):
         super().__init__(subscription_id=subscription_id, parameters=SubscriptionParameters())
         self._event_store_subscription = event_store_subscription
 
@@ -80,12 +80,12 @@ class AsyncDomainEventsSubscription(AsyncSubscription):
         await self._event_store_subscription.stop()
 
 
-class AsyncEventStore(ABC):
+class EventStore(ABC):
     def __init__(self):
-        self._subscriptions: List['AsyncEventStoreSubscription'] = list()
+        self._subscriptions: List['EventStoreSubscription'] = list()
 
     @property
-    def subscriptions(self) -> Tuple['AsyncEventStoreSubscription', ...]:
+    def subscriptions(self) -> Tuple['EventStoreSubscription', ...]:
         return tuple(self._subscriptions)
 
     @abstractmethod
@@ -101,19 +101,19 @@ class AsyncEventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription(self, subscription_id: str, subscription_parameters: 'SubscriptionParameters') -> 'AsyncEventStoreSubscription':
+    async def create_subscription(self, subscription_id: str, subscription_parameters: 'SubscriptionParameters') -> 'EventStoreSubscription':
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_all(self, subscription_id: str, start_position: int) -> 'AsyncEventStoreSubscription':
+    async def create_subscription_to_all(self, subscription_id: str, start_position: int) -> 'EventStoreSubscription':
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_events(self, subscription_id: str, events: List[str], start_position: int) -> 'AsyncEventStoreSubscription':
+    async def create_subscription_to_events(self, subscription_id: str, events: List[str], start_position: int) -> 'EventStoreSubscription':
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_stream(self, subscription_id: str, regex: str, start_position: int) -> 'AsyncEventStoreSubscription':
+    async def create_subscription_to_stream(self, subscription_id: str, regex: str, start_position: int) -> 'EventStoreSubscription':
         raise NotImplementedError
 
     @abstractmethod
