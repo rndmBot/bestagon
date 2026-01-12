@@ -13,6 +13,9 @@ class Neo4jCheckpointStore(CheckpointStore):
         self.driver = driver
         self.database_name = database_name
 
+    async def close(self) -> None:
+        pass
+
     async def delete_checkpoint(self, name: str) -> None:
         cypher = '''
         MATCH (c:Checkpoint {name: $name})

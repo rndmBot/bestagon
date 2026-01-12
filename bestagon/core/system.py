@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import List, Any, Tuple
 
 from bestagon.core.checkpoint_store import CheckpointStore
@@ -73,19 +73,40 @@ class EventSourcedSystem(ABC):
 
     @staticmethod
     async def execute_command(command: Command) -> None:
+        """
+        TODO - command bus
+            There should be interceptors on command bus, they can alter the command message by adding metadata. They can also block the command by throwing an exception.
+
+        TODO - Structural validation
+            There is no point in processing a command if it does not contain all required information in the correct format.
+            In fact, a command that lacks information should be blocked as early as possible, preferably even before a transaction has been started.
+            Therefore, an interceptor should check all incoming commands for the availability of such information. This is called structural validation.
+        """
+        # TODO - FUTURE - there should be command bus
         command_handler = mapper.get_command_handler(command_type=type(command))
         await command_handler(command)
 
     @staticmethod
     async def execute_query(query: Query) -> Any:
+        # TODO - FUTURE - there should be query bus
+        # TODO - query bus can provide query interceptors for validation and query modification
         query_handler = mapper.get_query_handler(type(query))
         result = await query_handler(query)
         return result
 
-    @abstractmethod
     async def initialize(self) -> None:
-        raise NotImplementedError
+        await self.event_store.connect()
+        await self.checkpoint_store.initialize()
 
-    @abstractmethod
     async def shutdown(self) -> None:
-        raise NotImplementedError
+        for app in self.applications:
+            await app.stop()
+
+        for proj in self.projections:
+            await proj.stop()
+
+        for task in self._subscription_tasks:
+            task.cancel()
+
+        await self.event_store.close()
+        await self.checkpoint_store.close()

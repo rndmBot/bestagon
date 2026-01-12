@@ -1,3 +1,4 @@
+import inspect
 import json
 from dataclasses import asdict
 from typing import Type, Dict, Callable
@@ -105,15 +106,31 @@ class Mapper:
 mapper = Mapper()
 
 
-def command_handler(command_type: Type[Command]):
+def _extract_type(fn: Callable) -> Type:
+    signature = inspect.signature(fn)
+    params = list(signature.parameters.values())
+    if params:
+        extracted_type = params[0].annotation
+        return extracted_type
+    else:
+        raise ValueError('No parameters found in signature')
+
+
+def command_handler():
     def decorator(fn):
+        command_type = _extract_type(fn)
+        if not issubclass(command_type, Command):
+            raise TypeError(f'Invalid command type {command_type}')
         mapper.register_command_handler(command_type=command_type, handler=fn)
         return fn
     return decorator
 
 
-def query_handler(query_type: Type[Query]):
+def query_handler():
     def decorator(fn):
+        query_type = _extract_type(fn)
+        if not issubclass(query_type, Query):
+            raise TypeError(f'Invalid query type {query_type}')
         mapper.register_query_handler(query_type=query_type, handler=fn)
         return fn
     return decorator

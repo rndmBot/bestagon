@@ -41,6 +41,7 @@ class EventProcessor(ABC):
             application_event = await self.subscription.next_event()
 
             # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executed in a single transaction (how??? there are no Trasactions in event sourcing)
+            # TODO - ORLY - add unit of work to coordinate event processing???
             await self.process_event(event=application_event.domain_event)
             await self.checkpoint_store.set_checkpoint(name=self.subscription.subscription_id, value=application_event.commit_position)
 

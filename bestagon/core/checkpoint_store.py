@@ -5,6 +5,10 @@ class CheckpointStore(ABC):
     # TODO - add possibility to remove all checkpoints for specific application
 
     @abstractmethod
+    async def close(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     async def delete_checkpoint(self, name: str) -> None:
         raise NotImplementedError
 
