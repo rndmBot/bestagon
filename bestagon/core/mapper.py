@@ -110,7 +110,7 @@ def _extract_type(fn: Callable) -> Type:
     signature = inspect.signature(fn)
     params = list(signature.parameters.values())
     if params:
-        extracted_type = params[0].annotation
+        extracted_type = params[-1].annotation
         return extracted_type
     else:
         raise ValueError('No parameters found in signature')
