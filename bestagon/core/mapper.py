@@ -117,7 +117,7 @@ def _extract_type(fn: Callable) -> Type:
 
 
 def command_handler():
-    def decorator(fn):
+    async def decorator(fn):
         command_type = _extract_type(fn)
         if not issubclass(command_type, Command):
             raise TypeError(f'Invalid command type {command_type}')
@@ -127,7 +127,7 @@ def command_handler():
 
 
 def query_handler():
-    def decorator(fn):
+    async def decorator(fn):
         query_type = _extract_type(fn)
         if not issubclass(query_type, Query):
             raise TypeError(f'Invalid query type {query_type}')
