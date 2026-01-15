@@ -122,7 +122,7 @@ def command_handler():
         if not issubclass(command_type, Command):
             raise TypeError(f'Invalid command type {command_type}')
         mapper.register_command_handler(command_type=command_type, handler=fn)
-        return fn
+        await fn
     return decorator
 
 
@@ -132,7 +132,7 @@ def query_handler():
         if not issubclass(query_type, Query):
             raise TypeError(f'Invalid query type {query_type}')
         mapper.register_query_handler(query_type=query_type, handler=fn)
-        return fn
+        await fn
     return decorator
 
 
