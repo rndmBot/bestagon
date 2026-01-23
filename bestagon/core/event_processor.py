@@ -1,7 +1,8 @@
 import asyncio
+import inspect
 import logging
 from abc import abstractmethod, ABC
-
+from typing import Callable, Type
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_store import EventStore, ApplicationSubscription
@@ -74,7 +75,6 @@ class Application(EventProcessor):
     interaction between multiple aggregates.
     """
 
-    # TODO - register command hanbdlers automatically when initializing application
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         super().__init__(checkpoint_store=checkpoint_store)
         self._repository = AsyncRepository(event_store=event_store)
@@ -82,6 +82,22 @@ class Application(EventProcessor):
     @property
     def repository(self) -> AsyncRepository:
         return self._repository
+
+    @staticmethod
+    def _extract_type(fn: Callable) -> Type:
+        signature = inspect.signature(fn)
+        params = list(signature.parameters.values())
+        if params:
+            extracted_type = params[-1].annotation
+            return extracted_type
+        else:
+            raise ValueError('No parameters found in signature')
+
+    def _register_command_handlers(self) -> None:
+        # TODO - zapili
+        # TODO - call in init
+        pass
+
 
 
 class Projection(EventProcessor):
