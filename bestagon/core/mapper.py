@@ -116,28 +116,6 @@ def _extract_type(fn: Callable) -> Type:
         raise ValueError('No parameters found in signature')
 
 
-# TODO - not working, fixit
-# def command_handler():
-#     async def decorator(fn):
-#         command_type = _extract_type(fn)
-#         if not issubclass(command_type, Command):
-#             raise TypeError(f'Invalid command type {command_type}')
-#         mapper.register_command_handler(command_type=command_type, handler=fn)
-#         await fn
-#     return decorator
-
-
-# TODO - not working, fixit
-# def query_handler():
-#     async def decorator(fn):
-#         query_type = _extract_type(fn)
-#         if not issubclass(query_type, Query):
-#             raise TypeError(f'Invalid query type {query_type}')
-#         mapper.register_query_handler(query_type=query_type, handler=fn)
-#         await fn
-#     return decorator
-
-
 def register_aggregate_type():
     def decorator(cls: Type[Aggregate]) -> Type[Aggregate]:
         mapper.register_aggregate_type(aggregate_class=cls, aggregate_type=cls.get_aggregate_type())
