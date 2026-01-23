@@ -73,6 +73,8 @@ class Application(EventProcessor):
     Application is the place where you implement your use cases, starting from simple things like creation of aggregates and ending with complex cases which can involve
     interaction between multiple aggregates.
     """
+
+    # TODO - register command hanbdlers automatically when initializing application
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         super().__init__(checkpoint_store=checkpoint_store)
         self._repository = AsyncRepository(event_store=event_store)
