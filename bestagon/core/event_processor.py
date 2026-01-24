@@ -6,7 +6,8 @@ from typing import Callable, Type
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_store import EventStore, ApplicationSubscription
-from bestagon.core.message import DomainEvent
+from bestagon.core.mapper import mapper
+from bestagon.core.message import DomainEvent, Command
 from bestagon.core.repository import AsyncRepository
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ class Application(EventProcessor):
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         super().__init__(checkpoint_store=checkpoint_store)
         self._repository = AsyncRepository(event_store=event_store)
+        self._register_command_handlers()
 
     @property
     def repository(self) -> AsyncRepository:
@@ -94,10 +96,18 @@ class Application(EventProcessor):
             raise ValueError('No parameters found in signature')
 
     def _register_command_handlers(self) -> None:
-        # TODO - zapili
-        # TODO - call in init
-        pass
-
+        for attribute in dir(self):
+            if attribute.startswith('__'):
+                continue
+            attribute = getattr(self, attribute)
+            if inspect.ismethod(attribute):
+                is_command_handler = getattr(attribute, 'is_command_handler', None)  # TODO - fragile
+                if is_command_handler:
+                    command_type = self._extract_type(attribute)
+                    if not issubclass(command_type, Command):
+                        raise TypeError(f'Invalid command type, expected <Command>, got {type(command_type)}')
+                    mapper.register_command_handler(command_type=command_type, handler=attribute)
+                    logger.debug(f'Command handler {attribute} registered for command {command_type}')
 
 
 class Projection(EventProcessor):

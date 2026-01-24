@@ -116,6 +116,12 @@ def _extract_type(fn: Callable) -> Type:
         raise ValueError('No parameters found in signature')
 
 
+def command_handler(func):
+    # TODO - is there more elegant way to do it???
+    func.is_command_handler = True
+    return func
+
+
 def register_aggregate_type():
     def decorator(cls: Type[Aggregate]) -> Type[Aggregate]:
         mapper.register_aggregate_type(aggregate_class=cls, aggregate_type=cls.get_aggregate_type())
