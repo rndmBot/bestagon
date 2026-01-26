@@ -75,6 +75,7 @@ class Aggregate(ABC):
     Next step - application module.
     """
 
+    # TODO - register aggregate type automaticallys
     # TODO - event handlers take events as input and change the aggregate state
     # TODO - command handlers take commands as input, validate business logic and trigger events
     # TODO - aggregate state changes should occur only in event handlers, NOT command handlers, how to protect aggregate from occasional state change in command handler???

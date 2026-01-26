@@ -116,28 +116,6 @@ def _extract_type(fn: Callable) -> Type:
         raise ValueError('No parameters found in signature')
 
 
-# TODO - rethink
-# def _register_command_handlers(self) -> None:
-#     for attribute in dir(self):
-#         if attribute.startswith('__'):
-#             continue
-#         attribute = getattr(self, attribute)
-#         if inspect.ismethod(attribute):
-#             is_command_handler = getattr(attribute, 'is_command_handler', None)  # TODO - fragile
-#             if is_command_handler:
-#                 command_type = self._extract_type(attribute)
-#                 if not issubclass(command_type, Command):
-#                     raise TypeError(f'Invalid command type, expected <Command>, got {type(command_type)}')
-#                 mapper.register_command_handler(command_type=command_type, handler=attribute)
-#                 logger.debug(f'Command handler {attribute} registered for command {command_type}')
-
-
-# TODO - is there more elegant way to do it???
-# def command_handler(func):
-#     func.is_command_handler = True
-#     return func
-
-
 def register_aggregate_type():
     def decorator(cls: Type[Aggregate]) -> Type[Aggregate]:
         mapper.register_aggregate_type(aggregate_class=cls, aggregate_type=cls.get_aggregate_type())

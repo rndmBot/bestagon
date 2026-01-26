@@ -97,6 +97,20 @@ class EventSourcedSystem(ABC):
     async def initialize(self) -> None:
         await self.event_store.connect()
         await self.checkpoint_store.initialize()
+        self.register_command_handlers()
+        self.register_query_handlers()
+
+    def register_aggregate_types(self) -> None:
+        pass
+
+    def register_command_handlers(self) -> None:
+        pass
+
+    def register_event_types(self) -> None:
+        pass
+
+    def register_query_handlers(self) -> None:
+        pass
 
     async def shutdown(self) -> None:
         for app in self.applications:
