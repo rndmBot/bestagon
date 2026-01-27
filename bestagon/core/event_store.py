@@ -82,7 +82,7 @@ class ApplicationSubscription(Subscription):
 
 class EventStore(ABC):
     def __init__(self):
-        self._subscriptions: List['EventStoreSubscription'] = list()
+        self._subscriptions: List['EventStoreSubscription'] = list()  # TODO - ORLY??? Do I need it?
 
     @property
     def subscriptions(self) -> Tuple['EventStoreSubscription', ...]:

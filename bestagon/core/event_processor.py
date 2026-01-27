@@ -1,6 +1,8 @@
 import asyncio
 import logging
 from abc import abstractmethod, ABC
+from asyncio import CancelledError
+from typing import Union
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_store import EventStore, ApplicationSubscription
@@ -13,7 +15,8 @@ logger = logging.getLogger(__name__)
 class EventProcessor(ABC):
     def __init__(self, checkpoint_store: CheckpointStore):
         self._checkpoint_store = checkpoint_store
-        self._subscription = None
+        self._subscription: Union[ApplicationSubscription, None] = None
+        self._subscription_task: Union[asyncio.Task, None] = None
 
     @property
     def checkpoint_store(self) -> CheckpointStore:
@@ -24,7 +27,7 @@ class EventProcessor(ABC):
         return self.get_name()
 
     @property
-    def subscription(self) -> ApplicationSubscription:
+    def subscription(self) -> Union[ApplicationSubscription, None]:
         return self._subscription
 
     @abstractmethod
@@ -33,9 +36,6 @@ class EventProcessor(ABC):
         raise NotImplementedError
 
     async def _consume_subscription(self) -> None:
-        # TODO - rethink, maybe there is a better way to consume events???
-        # TODO - intercept asyncio.CancelledError to shutdown gracefully
-
         while self.subscription.running:
             application_event = await self.subscription.next_event()
 
@@ -48,19 +48,31 @@ class EventProcessor(ABC):
     def get_name(self) -> str:
         raise NotImplementedError
 
-    def set_subscription(self, subscription: ApplicationSubscription) -> asyncio.Task:
+    def set_subscription(self, subscription: ApplicationSubscription) -> None:
         """Only one subscription currently allowed"""
-        # TODO - refactor to handle multiple subscriptions
-        # TODO - there should be another way to add subscriptions, for example 'add_subscription'
-
         if self.subscription is not None:
             raise ValueError(f'Failed to set subscription for {self.name} - only one subspcription can be set for event processor.')
         self._subscription = subscription
-        task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
-        return task
+        self._subscription_task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
 
     async def stop(self) -> None:
-        await self.subscription.stop()
+        # Do nothing if there is no subscription
+        if self.subscription is None:
+            return
+
+        await self.subscription.stop()  # TODO - subscription should be deleted when stopped
+        if not self._subscription_task.done():
+            self._subscription_task.cancel()
+
+        try:
+            await self._subscription_task
+        except CancelledError:
+            logger.debug(f'Task {self._subscription_task.get_name()} cancelled')
+        except StopAsyncIteration:
+            logger.debug(f'Task {self._subscription_task.get_name()} finished: subscription stop')
+
+        self._subscription = None
+        self._subscription_task = None
 
 
 class Application(EventProcessor):
