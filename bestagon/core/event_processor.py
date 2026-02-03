@@ -54,6 +54,7 @@ class EventProcessor(ABC):
             raise ValueError(f'Failed to set subscription for {self.name} - only one subspcription can be set for event processor.')
         self._subscription = subscription
         self._subscription_task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
+        # self._subscription_task.add_done_callback(self._when_task_is_done)  # TODO - zapili
 
     async def stop(self) -> None:
         # Do nothing if there is no subscription
