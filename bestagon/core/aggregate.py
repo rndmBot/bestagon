@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Tuple
 
 from bestagon.core.message import DomainEvent, Created
-from bestagon.exceptions import AggregateIDMismatch, AggregateVersionError
+from bestagon.core.exceptions import AggregateIDMismatch, AggregateVersionError
 
 
 class Aggregate(ABC):
@@ -75,7 +75,7 @@ class Aggregate(ABC):
     Next step - application module.
     """
 
-    # TODO - register aggregate type automaticallys
+    # TODO - register aggregate type automatically
     # TODO - event handlers take events as input and change the aggregate state
     # TODO - command handlers take commands as input, validate business logic and trigger events
     # TODO - aggregate state changes should occur only in event handlers, NOT command handlers, how to protect aggregate from occasional state change in command handler???
@@ -171,7 +171,6 @@ class Aggregate(ABC):
         Aggregate type should be defined during modelling stage and MUST NOT BE CHANGED during the entire aggregate lifecycle.
         It is used by repository to retreive specific aggregate instances and by event store as prefix to event stream.
         """
-        # TODO - something smells in here, is it possible to get rid of aggregate type???
         raise NotImplementedError
 
     def mutate(self, event: DomainEvent) -> None:

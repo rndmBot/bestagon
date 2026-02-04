@@ -76,13 +76,14 @@ class ApplicationSubscription(Subscription):
         return application_event
 
     async def stop(self) -> None:
-        self._running = False
-        await self._event_store_subscription.stop()
+        if self.running:
+            self._running = False
+            await self._event_store_subscription.stop()
 
 
 class EventStore(ABC):
     def __init__(self):
-        self._subscriptions: List['EventStoreSubscription'] = list()  # TODO - ORLY??? Do I need it?
+        self._subscriptions: List['EventStoreSubscription'] = list()
 
     @property
     def subscriptions(self) -> Tuple['EventStoreSubscription', ...]:

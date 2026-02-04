@@ -57,6 +57,7 @@ class EventSourcedSystem(ABC):
             raise ValueError(f'Application with name {app.name} have already been added to the system')
         await self._subscribe_event_processor(event_processor=app)
         self._applications[app.name] = app
+        # TODO - the system should stop if there is a failure in any application
 
     async def add_projection(self, proj: Projection) -> None:
         if proj.name in self._projections:
