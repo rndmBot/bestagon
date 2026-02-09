@@ -8,8 +8,8 @@ from kurrentdbclient import StreamState, NewEvent, DEFAULT_EXCLUDE_FILTER, Async
 from kurrentdbclient.common import DEFAULT_WINDOW_SIZE, DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER
 from kurrentdbclient.exceptions import NotFoundError
 
-from bestagon.core.event_store import EventStore, SubscriptionParameters, EventStoreSubscription
-from bestagon.core.message import StreamEvent, NewStreamEvent
+from bestagon.core.event_store import EventStore, SubscriptionParameters, EventStoreSubscription, StreamEvent, \
+    NewStreamEvent
 from bestagon.core.exceptions import IntegrityError
 
 
@@ -34,8 +34,8 @@ class KurrentDBSubscriptionParameters(SubscriptionParameters):
 
 
 class AsyncKurrentDBSubscription(EventStoreSubscription):
-    def __init__(self, subscription_id: str, parameters: KurrentDBSubscriptionParameters, kdb_subscription: AsyncCatchupSubscription):
-        super().__init__(subscription_id=subscription_id, parameters=parameters)
+    def __init__(self, name: str, parameters: KurrentDBSubscriptionParameters, kdb_subscription: AsyncCatchupSubscription):
+        super().__init__(name=name, parameters=parameters)
         self._kdb_subscription = kdb_subscription
 
     async def next_event(self) -> StreamEvent:
@@ -96,7 +96,8 @@ class AsyncKurrentDBEventStore(EventStore):
         await self.client.connect()
         logger.info('Event store connected')
 
-    async def create_subscription(self, subscription_id: str, subscription_parameters: KurrentDBSubscriptionParameters) -> AsyncKurrentDBSubscription:
+    async def create_subscription(self, subscription_name: str,
+                                  subscription_parameters: KurrentDBSubscriptionParameters) -> AsyncKurrentDBSubscription:
         kdb_subscription = await self.client.subscribe_to_all(
             commit_position=subscription_parameters.commit_position,
             from_end=subscription_parameters.from_end,
@@ -114,31 +115,32 @@ class AsyncKurrentDBEventStore(EventStore):
         )
         kdb_subscription = cast(AsyncCatchupSubscription, kdb_subscription)
 
-        subscription = AsyncKurrentDBSubscription(subscription_id=subscription_id, parameters=subscription_parameters, kdb_subscription=kdb_subscription)
+        subscription = AsyncKurrentDBSubscription(name=subscription_name, parameters=subscription_parameters, kdb_subscription=kdb_subscription)
         self._subscriptions.append(subscription)
         return subscription
 
-    async def create_subscription_to_all(self, subscription_id: str, start_position: int) -> 'EventStoreSubscription':
+    async def create_subscription_to_all(self, subscription_name: str, start_position: int) -> 'EventStoreSubscription':
         params = KurrentDBSubscriptionParameters(commit_position=start_position)
-        sub = await self.create_subscription(subscription_id=subscription_id, subscription_parameters=params)
+        sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
         return sub
 
-    async def create_subscription_to_events(self, subscription_id: str, events: List[str], start_position: int) -> 'EventStoreSubscription':
+    async def create_subscription_to_events(self, subscription_name: str, events: List[str],
+                                            start_position: int) -> 'EventStoreSubscription':
         params = KurrentDBSubscriptionParameters(
             commit_position=start_position,
             filter_include=events,
             filter_by_stream_name=False
         )
-        sub = await self.create_subscription(subscription_id=subscription_id, subscription_parameters=params)
+        sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
         return sub
 
-    async def create_subscription_to_stream(self, subscription_id: str, regex: str, start_position: int) -> EventStoreSubscription:
+    async def create_subscription_to_stream(self, subscription_name: str, regex: str, start_position: int) -> EventStoreSubscription:
         params = KurrentDBSubscriptionParameters(
             commit_position=start_position,
             filter_include=[regex],
             filter_by_stream_name=True
         )
-        return await self.create_subscription(subscription_id=subscription_id, subscription_parameters=params)
+        return await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
 
     async def get_stream(self, stream_name: str) -> List[StreamEvent]:
         events = await self.client.get_stream(stream_name=stream_name)

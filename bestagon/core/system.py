@@ -4,7 +4,7 @@ from typing import Any, Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_processor import Application, Projection, EventProcessor
-from bestagon.core.event_store import EventStore, ApplicationSubscription
+from bestagon.core.event_store import EventStore
 from bestagon.core.mapper import mapper
 from bestagon.core.message import Command, Query
 
@@ -47,9 +47,11 @@ class EventSourcedSystem(ABC):
 
         checkpoint_name = f'{event_processor.name}_subscription'
         checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
-        es_subscription = await self.event_store.create_subscription_to_all(subscription_id=checkpoint_name, start_position=checkpoint)
-        app_subscription = ApplicationSubscription(subscription_id=es_subscription.subscription_id, event_store_subscription=es_subscription)
-        event_processor.set_subscription(app_subscription)
+        subscription = await self.event_store.create_subscription_to_all(
+            subscription_name=checkpoint_name,
+            start_position=checkpoint
+        )
+        event_processor.set_subscription(subscription)
         logger.info(f'Event processor {event_processor.name} with subscription {checkpoint_name} added')
 
     async def add_application(self, app: Application) -> None:

@@ -5,7 +5,8 @@ from asyncio import CancelledError
 from typing import Union
 
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.event_store import EventStore, ApplicationSubscription
+from bestagon.core.event_store import EventStore, EventStoreSubscription
+from bestagon.core.mapper import mapper
 from bestagon.core.message import DomainEvent
 from bestagon.core.repository import AsyncRepository
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 class EventProcessor(ABC):
     def __init__(self, checkpoint_store: CheckpointStore):
         self._checkpoint_store = checkpoint_store
-        self._subscription: Union[ApplicationSubscription, None] = None
+        self._subscription: Union[EventStoreSubscription, None] = None
         self._task: Union[asyncio.Task, None] = None
 
     @property
@@ -27,7 +28,7 @@ class EventProcessor(ABC):
         return self.get_name()
 
     @property
-    def subscription(self) -> Union[ApplicationSubscription, None]:
+    def subscription(self) -> Union[EventStoreSubscription, None]:
         return self._subscription
 
     @property
@@ -42,17 +43,18 @@ class EventProcessor(ABC):
     async def _consume_subscription(self) -> None:
         while self.subscription.running:
             try:
-                application_event = await self.subscription.next_event()
+                stream_event = await self.subscription.next_event()
+                domain_event = mapper.to_domain_event(stream_event)
             except StopAsyncIteration:
-                logger.debug(f'Subscription {self.subscription.subscription_id} stopped.')
+                logger.debug(f'Subscription {self.subscription.name} stopped.')
                 break
 
             # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executed in a single transaction (how??? there are no Trasactions in event sourcing)
             # TODO - ORLY - add unit of work to coordinate event processing or make em synchronous???
             # TODO - on exception system should be stoped
             try:
-                await self.process_event(event=application_event.domain_event)
-                await self.checkpoint_store.set_checkpoint(name=self.subscription.subscription_id, value=application_event.commit_position)
+                await self.process_event(event=domain_event)
+                await self.checkpoint_store.set_checkpoint(name=self.subscription.name, value=stream_event.commit_position)
             except Exception as e:
                 logger.warning(f'ACHTUNG - event processor {self.name} critically failed:')
                 logger.exception(e)
@@ -62,7 +64,7 @@ class EventProcessor(ABC):
     def get_name(self) -> str:
         raise NotImplementedError
 
-    def set_subscription(self, subscription: ApplicationSubscription) -> None:
+    def set_subscription(self, subscription: EventStoreSubscription) -> None:
         """Only one subscription currently allowed"""
         if self.subscription is not None:
             raise ValueError(f'Failed to set subscription for {self.name} - only one subspcription can be set for event processor.')
@@ -70,7 +72,6 @@ class EventProcessor(ABC):
         self._task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
 
     async def stop(self) -> None:
-        # Do nothing if there is no subscription
         if self.subscription is None:
             return
 

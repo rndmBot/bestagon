@@ -56,32 +56,3 @@ class DomainEvent:
 @dataclass(frozen=True)
 class Created(DomainEvent):
     pass
-
-
-@dataclass(frozen=True)
-class ApplicationEvent:
-    # TODO - ORLY - inherit from Message???
-    commit_position: int
-    domain_event: DomainEvent
-
-
-# TODO - belong to event store module
-@dataclass(frozen=True)
-class NewStreamEvent:
-    """New event to store in event store"""
-    stream_position: int  # Position in aggreate sequence
-    event_type: str
-    payload: bytes
-    metadata: bytes
-
-
-# TODO - belong to event store module
-@dataclass(frozen=True)
-class StreamEvent:
-    """Event retreived from EventStore"""
-    stream_name: str
-    stream_position: int  # Position in aggreate sequence
-    commit_position: int  # Position in event store sequence
-    event_type: str
-    payload: bytes
-    metadata: bytes
