@@ -21,7 +21,6 @@ class Neo4jCheckpointStore(CheckpointStore):
         MATCH (c:Checkpoint {name: $name})
         DETACH DELETE c
         '''
-
         async with self.driver.session(default_access_mode=neo4j.WRITE_ACCESS, database=self.database_name) as sess:
             await sess.run(cypher, name=name)
         logger.info(f'Checkpoint {name} deleted')
@@ -31,7 +30,6 @@ class Neo4jCheckpointStore(CheckpointStore):
         MATCH (c:Checkpoint {name: $name})
         RETURN c.value
         '''
-
         async with self.driver.session(database=self.database_name, default_access_mode=neo4j.READ_ACCESS) as sess:
             result = await sess.run(
                 cypher,  # NOQA
@@ -59,7 +57,6 @@ class Neo4jCheckpointStore(CheckpointStore):
         FOR (n:Checkpoint)
         ON n.name
         '''
-
         async with self.driver.session(database=self.database_name) as sess:
             await sess.run(index_cypher)  # NOQA
 

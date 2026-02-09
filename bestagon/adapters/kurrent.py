@@ -10,7 +10,7 @@ from kurrentdbclient.exceptions import NotFoundError
 
 from bestagon.core.event_store import EventStore, SubscriptionParameters, EventStoreSubscription
 from bestagon.core.message import StreamEvent, NewStreamEvent
-from bestagon.exceptions import IntegrityError
+from bestagon.core.exceptions import IntegrityError
 
 
 logger = logging.getLogger(__name__)
@@ -54,8 +54,9 @@ class AsyncKurrentDBSubscription(EventStoreSubscription):
         return stream_event
 
     async def stop(self) -> None:
-        self._running = True
-        await self._kdb_subscription.stop()
+        if self.running:
+            self._running = False
+            await self._kdb_subscription.stop()
 
 
 class AsyncKurrentDBEventStore(EventStore):

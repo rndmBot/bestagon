@@ -6,7 +6,7 @@ from bestagon.core.aggregate import Aggregate
 from bestagon.core.mapper import mapper
 from bestagon.core.message import DomainEvent
 from bestagon.core.event_store import EventStore
-from bestagon.exceptions import AggregateNotFoundError, IntegrityError
+from bestagon.core.exceptions import AggregateNotFoundError, IntegrityError
 
 logger = logging.getLogger(__name__)
 

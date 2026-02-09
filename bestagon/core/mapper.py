@@ -5,7 +5,7 @@ from typing import Type, Dict, Callable
 
 from bestagon.core.aggregate import Aggregate
 from bestagon.core.message import DomainEvent, DomainEventMetadata, NewStreamEvent, StreamEvent, Query, Command
-from bestagon.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError, HandlerAlreadyRegistered
+from bestagon.core.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError, HandlerAlreadyRegistered
 
 
 class Mapper:
@@ -114,28 +114,6 @@ def _extract_type(fn: Callable) -> Type:
         return extracted_type
     else:
         raise ValueError('No parameters found in signature')
-
-
-# TODO - not working, fixit
-# def command_handler():
-#     async def decorator(fn):
-#         command_type = _extract_type(fn)
-#         if not issubclass(command_type, Command):
-#             raise TypeError(f'Invalid command type {command_type}')
-#         mapper.register_command_handler(command_type=command_type, handler=fn)
-#         await fn
-#     return decorator
-
-
-# TODO - not working, fixit
-# def query_handler():
-#     async def decorator(fn):
-#         query_type = _extract_type(fn)
-#         if not issubclass(query_type, Query):
-#             raise TypeError(f'Invalid query type {query_type}')
-#         mapper.register_query_handler(query_type=query_type, handler=fn)
-#         await fn
-#     return decorator
 
 
 def register_aggregate_type():

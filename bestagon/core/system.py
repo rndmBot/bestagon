@@ -1,7 +1,6 @@
-import asyncio
 import logging
 from abc import ABC
-from typing import List, Any, Tuple
+from typing import Any, Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_processor import Application, Projection, EventProcessor
@@ -16,17 +15,18 @@ logger = logging.getLogger(__name__)
 class EventSourcedSystem(ABC):
     # TODO - application graph
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
+    # TODO - add possibility to rebuild projection
 
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         self._event_store = event_store
         self._checkpoint_store = checkpoint_store
-        self._applications: List[Application] = list()
-        self._projections: List[Projection] = list()
-        self._subscription_tasks: List[asyncio.Task] = list()
+        self._applications: Dict[str, Application] = dict()
+        self._projections: Dict[str, Projection] = dict()
 
     @property
     def applications(self) -> Tuple[Application, ...]:
-        return tuple(self._applications)
+        apps = tuple(self._applications.values())
+        return apps
 
     @property
     def checkpoint_store(self) -> CheckpointStore:
@@ -38,9 +38,10 @@ class EventSourcedSystem(ABC):
 
     @property
     def projections(self) -> Tuple[Projection, ...]:
-        return tuple(self._projections)
+        projs = tuple(self._projections.values())
+        return projs
 
-    async def _add_event_processor(self, event_processor: EventProcessor) -> None:
+    async def _subscribe_event_processor(self, event_processor: EventProcessor) -> None:
         if isinstance(event_processor, Projection):
             await event_processor.initialize()
 
@@ -48,28 +49,21 @@ class EventSourcedSystem(ABC):
         checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
         es_subscription = await self.event_store.create_subscription_to_all(subscription_id=checkpoint_name, start_position=checkpoint)
         app_subscription = ApplicationSubscription(subscription_id=es_subscription.subscription_id, event_store_subscription=es_subscription)
-        task = event_processor.set_subscription(app_subscription)
-        task.add_done_callback(self._when_subscription_task_done)
-        self._subscription_tasks.append(task)
+        event_processor.set_subscription(app_subscription)
         logger.info(f'Event processor {event_processor.name} with subscription {checkpoint_name} added')
 
-    def _when_subscription_task_done(self, task: asyncio.Task) -> None:
-        try:
-            result = task.result()
-            logger.info(f'Task {task.get_name()} finished with result: {result}')
-        except StopAsyncIteration:
-            logger.info(f'Task {task.get_name()} finished: subscription stop')
-        except Exception as e:
-            asyncio.create_task(self.shutdown())
-            raise e
-
     async def add_application(self, app: Application) -> None:
-        await self._add_event_processor(event_processor=app)
-        self._applications.append(app)
+        if app.name in self._applications:
+            raise ValueError(f'Application with name {app.name} have already been added to the system')
+        await self._subscribe_event_processor(event_processor=app)
+        self._applications[app.name] = app
+        # TODO - the system should stop if there is a failure in any application
 
     async def add_projection(self, proj: Projection) -> None:
-        await self._add_event_processor(event_processor=proj)
-        self._projections.append(proj)
+        if proj.name in self._projections:
+            raise ValueError(f'Projection with name {proj.name} have already been added to the system')
+        await self._subscribe_event_processor(event_processor=proj)
+        self._projections[proj.name] = proj
 
     @staticmethod
     async def execute_command(command: Command) -> None:
@@ -95,8 +89,24 @@ class EventSourcedSystem(ABC):
         return result
 
     async def initialize(self) -> None:
+        self.register_command_handlers()
+        self.register_query_handlers()
+        self.register_aggregate_types()
+        self.register_event_types()
         await self.event_store.connect()
         await self.checkpoint_store.initialize()
+
+    def register_aggregate_types(self) -> None:
+        pass
+
+    def register_command_handlers(self) -> None:
+        pass
+
+    def register_event_types(self) -> None:
+        pass
+
+    def register_query_handlers(self) -> None:
+        pass
 
     async def shutdown(self) -> None:
         for app in self.applications:
@@ -104,9 +114,6 @@ class EventSourcedSystem(ABC):
 
         for proj in self.projections:
             await proj.stop()
-
-        for task in self._subscription_tasks:
-            task.cancel()
 
         await self.event_store.close()
         await self.checkpoint_store.close()
