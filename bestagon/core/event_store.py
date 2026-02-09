@@ -60,6 +60,7 @@ class EventStoreSubscription(Subscription):
 
 class ApplicationSubscription(Subscription):
     # TODO - does not belong here
+    # TODO - put it into application module
     def __init__(self, subscription_id: str, event_store_subscription: EventStoreSubscription):
         super().__init__(subscription_id=subscription_id, parameters=SubscriptionParameters())
         self._event_store_subscription = event_store_subscription
