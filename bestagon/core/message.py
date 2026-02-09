@@ -65,6 +65,7 @@ class ApplicationEvent:
     domain_event: DomainEvent
 
 
+# TODO - belong to event store module
 @dataclass(frozen=True)
 class NewStreamEvent:
     """New event to store in event store"""
@@ -74,6 +75,7 @@ class NewStreamEvent:
     metadata: bytes
 
 
+# TODO - belong to event store module
 @dataclass(frozen=True)
 class StreamEvent:
     """Event retreived from EventStore"""
@@ -83,21 +85,3 @@ class StreamEvent:
     event_type: str
     payload: bytes
     metadata: bytes
-
-    def __eq__(self, other):
-        # TODO - ORLY???
-        if isinstance(other, StreamEvent):
-            eq = all(
-                [
-                    self.stream_name == other.stream_name,
-                    self.stream_position == other.stream_position
-                ]
-            )
-            return eq
-        return NotImplemented
-
-    def __lt__(self, other):
-        # TODO - ORLY???
-        if isinstance(other, StreamEvent):
-            return self.stream_position < other.stream_position
-        return NotImplemented
