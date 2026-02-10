@@ -4,7 +4,7 @@ from abc import abstractmethod, ABC
 from asyncio import CancelledError
 from typing import Union
 
-from bestagon.core.checkpoint_store import CheckpointStore
+from bestagon.core.checkpoint_store import CheckpointStore, Checkpoint
 from bestagon.core.event_store import EventStore, EventStoreSubscription
 from bestagon.core.mapper import mapper
 from bestagon.core.message import DomainEvent
@@ -45,6 +45,7 @@ class EventProcessor(ABC):
             try:
                 stream_event = await self.subscription.next_event()
                 domain_event = mapper.to_domain_event(stream_event)
+                checkpoint = Checkpoint(name=self.subscription.name, value=stream_event.commit_position)  # TODO - find da proppa wei to generate checkpoints
             except StopAsyncIteration:
                 logger.debug(f'Subscription {self.subscription.name} stopped.')
                 break
@@ -54,7 +55,7 @@ class EventProcessor(ABC):
             # TODO - on exception system should be stoped
             try:
                 await self.process_event(event=domain_event)
-                await self.checkpoint_store.set_checkpoint(name=self.subscription.name, value=stream_event.commit_position)
+                await self.checkpoint_store.set_checkpoint(checkpoint)
             except Exception as e:
                 logger.warning(f'ACHTUNG - event processor {self.name} critically failed:')
                 logger.exception(e)

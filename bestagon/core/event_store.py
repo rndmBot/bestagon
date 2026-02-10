@@ -103,7 +103,7 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_stream(self, stream_name: str) -> List[StreamEvent]:
+    async def get_stream(self, stream_name: str) -> Tuple[StreamEvent]:
         raise NotImplementedError
 
     @abstractmethod

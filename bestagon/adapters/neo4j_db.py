@@ -1,9 +1,9 @@
 import logging
+from typing import Tuple
 
 import neo4j
 
-from bestagon.core.checkpoint_store import CheckpointStore
-
+from bestagon.core.checkpoint_store import CheckpointStore, Checkpoint
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class Neo4jCheckpointStore(CheckpointStore):
             await sess.run(cypher, name=name)
         logger.info(f'Checkpoint {name} deleted')
 
-    async def get_checkpoint(self, name: str) -> int:
+    async def get_checkpoint(self, name: str) -> Checkpoint:
         cypher = '''
         MATCH (c:Checkpoint {name: $name})
         RETURN c.value
@@ -35,13 +35,14 @@ class Neo4jCheckpointStore(CheckpointStore):
                 cypher,  # NOQA
                 name=name
             )
-            data = await result.single()
-            if data is not None:
-                data = data.value()
+            value = await result.single()
+            if value is not None:
+                value = value.value()
             else:
-                data = 0
+                value = 0
 
-        return data
+        checkpoint = Checkpoint(name=name, value=value)
+        return checkpoint
 
     async def initialize(self) -> None:
         create_cypher = "CREATE DATABASE $database_name IF NOT EXISTS"
@@ -60,7 +61,22 @@ class Neo4jCheckpointStore(CheckpointStore):
         async with self.driver.session(database=self.database_name) as sess:
             await sess.run(index_cypher)  # NOQA
 
-    async def set_checkpoint(self, name: str, value: int) -> None:
+    async def list_checkpoints(self) -> Tuple[Checkpoint, ...]:
+        cypher = '''
+        MATCH (c:Checkpoint)
+        WITH {
+            name: c.name,
+            value: c.value
+        } AS data
+        RETURN data
+        '''
+        async with self.driver.session(default_access_mode=neo4j.READ_ACCESS, database=self.database_name) as sess:
+            result = await sess.run(cypher)
+            data = await result.value()
+        checkpoints = tuple(Checkpoint(**datum) for datum in data)
+        return checkpoints
+
+    async def set_checkpoint(self, checkpoint: Checkpoint) -> None:
         cypher = '''
         MERGE (c:Checkpoint {name: $name})
         SET c.value = $value
@@ -69,7 +85,7 @@ class Neo4jCheckpointStore(CheckpointStore):
         async with self.driver.session(database=self.database_name, default_access_mode=neo4j.WRITE_ACCESS) as sess:
             await sess.run(
                 cypher,  # NOQA
-                name=name,
-                value=value
+                name=checkpoint.name,
+                value=checkpoint.value
             )
-        logger.debug(f'New checkpoint set for {name}: {value}')
+        logger.debug(f'New checkpoint set for {checkpoint.name}: {checkpoint.value}')

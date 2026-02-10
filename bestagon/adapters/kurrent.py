@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import List, Union, Sequence, cast
+from typing import List, Union, Sequence, cast, Tuple
 
 import grpc
 from kurrentdbclient import StreamState, NewEvent, DEFAULT_EXCLUDE_FILTER, AsyncKurrentDBClient, AsyncCatchupSubscription
@@ -142,7 +142,7 @@ class AsyncKurrentDBEventStore(EventStore):
         )
         return await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
 
-    async def get_stream(self, stream_name: str) -> List[StreamEvent]:
+    async def get_stream(self, stream_name: str) -> Tuple[StreamEvent]:
         events = await self.client.get_stream(stream_name=stream_name)
         stream_events = list()
         for event in events:
@@ -155,7 +155,7 @@ class AsyncKurrentDBEventStore(EventStore):
                 metadata=event.metadata
             )
             stream_events.append(stream_event)
-        return stream_events
+        return tuple(stream_events)
 
     async def stream_exists(self, stream_name: str) -> bool:
         try:

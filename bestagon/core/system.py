@@ -49,7 +49,7 @@ class EventSourcedSystem(ABC):
         checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
         subscription = await self.event_store.create_subscription_to_all(
             subscription_name=checkpoint_name,
-            start_position=checkpoint
+            start_position=checkpoint.value
         )
         event_processor.set_subscription(subscription)
         logger.info(f'Event processor {event_processor.name} with subscription {checkpoint_name} added')
