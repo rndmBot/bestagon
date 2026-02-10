@@ -64,7 +64,7 @@ class AsyncKurrentDBEventStore(EventStore):
         super().__init__()
         self.client = client
 
-    async def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
+    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent]) -> None:
         current_version = await self.client.get_current_version(stream_name=stream_name)
         first_event = events[0]
         if current_version == StreamState.NO_STREAM:

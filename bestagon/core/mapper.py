@@ -3,9 +3,9 @@ import json
 from dataclasses import asdict
 from typing import Type, Dict, Callable
 
-from bestagon.core.aggregate import Aggregate
+from bestagon.core.aggregate import Aggregate, DomainEvent, DomainEventMetadata
 from bestagon.core.event_store import StreamEvent, NewStreamEvent
-from bestagon.core.message import DomainEvent, DomainEventMetadata, Query, Command
+from bestagon.core.event_processor import Query, Command
 from bestagon.core.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError, HandlerAlreadyRegistered
 
 

@@ -3,10 +3,9 @@ from abc import ABC
 from typing import Any, Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.event_processor import Application, Projection, EventProcessor
+from bestagon.core.event_processor import Application, Projection, Command, Query
 from bestagon.core.event_store import EventStore
 from bestagon.core.mapper import mapper
-from bestagon.core.message import Command, Query
 
 
 logger = logging.getLogger(__name__)
@@ -41,30 +40,18 @@ class EventSourcedSystem(ABC):
         projs = tuple(self._projections.values())
         return projs
 
-    async def _subscribe_event_processor(self, event_processor: EventProcessor) -> None:
-        if isinstance(event_processor, Projection):
-            await event_processor.initialize()
-
-        checkpoint_name = f'{event_processor.name}_subscription'
-        checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
-        subscription = await self.event_store.create_subscription_to_all(
-            subscription_name=checkpoint_name,
-            start_position=checkpoint.value
-        )
-        event_processor.set_subscription(subscription)
-        logger.info(f'Event processor {event_processor.name} with subscription {checkpoint_name} added')
-
     async def add_application(self, app: Application) -> None:
         if app.name in self._applications:
             raise ValueError(f'Application with name {app.name} have already been added to the system')
-        await self._subscribe_event_processor(event_processor=app)
+        await app.subscribe_to(self.event_store)
         self._applications[app.name] = app
         # TODO - the system should stop if there is a failure in any application
 
     async def add_projection(self, proj: Projection) -> None:
         if proj.name in self._projections:
             raise ValueError(f'Projection with name {proj.name} have already been added to the system')
-        await self._subscribe_event_processor(event_processor=proj)
+        await proj.initialize()
+        await proj.subscribe_to(self.event_store)
         self._projections[proj.name] = proj
 
     @staticmethod

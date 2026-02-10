@@ -2,15 +2,27 @@ import asyncio
 import logging
 from abc import abstractmethod, ABC
 from asyncio import CancelledError
+from dataclasses import dataclass
 from typing import Union
 
+from bestagon.core.aggregate import DomainEvent
 from bestagon.core.checkpoint_store import CheckpointStore, Checkpoint
-from bestagon.core.event_store import EventStore, EventStoreSubscription
+from bestagon.core.event_store import EventStoreSubscription, EventStore
 from bestagon.core.mapper import mapper
-from bestagon.core.message import DomainEvent
-from bestagon.core.repository import AsyncRepository
+from bestagon.core.repository import EventSourcedRepository
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Command:
+    # TODO - commands sent through a command bus should allow the result to be returned
+    pass
+
+
+@dataclass(frozen=True)
+class Query:
+    pass
 
 
 class EventProcessor(ABC):
@@ -40,22 +52,27 @@ class EventProcessor(ABC):
         """Reimplement to provide reaction to the specific domain event"""
         raise NotImplementedError
 
+    @staticmethod
+    def _create_checkpoint_name(subscription_name: str) -> str:
+        return f'{subscription_name}_checkpoint'
+
     async def _consume_subscription(self) -> None:
         while self.subscription.running:
             try:
                 stream_event = await self.subscription.next_event()
                 domain_event = mapper.to_domain_event(stream_event)
-                checkpoint = Checkpoint(name=self.subscription.name, value=stream_event.commit_position)  # TODO - find da proppa wei to generate checkpoints
+                checkpoint = Checkpoint(
+                    name=self._create_checkpoint_name(self.subscription.name),
+                    value=stream_event.commit_position
+                )  # TODO - find da proppa wei to generate checkpoints
+
+                # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executed in a single transaction (how??? there are no Trasactions in event sourcing)
+                # TODO - on exception system should be stoped
+                await self.process_event(event=domain_event)
+                await self.checkpoint_store.set_checkpoint(checkpoint)
             except StopAsyncIteration:
                 logger.debug(f'Subscription {self.subscription.name} stopped.')
                 break
-
-            # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executed in a single transaction (how??? there are no Trasactions in event sourcing)
-            # TODO - ORLY - add unit of work to coordinate event processing or make em synchronous???
-            # TODO - on exception system should be stoped
-            try:
-                await self.process_event(event=domain_event)
-                await self.checkpoint_store.set_checkpoint(checkpoint)
             except Exception as e:
                 logger.warning(f'ACHTUNG - event processor {self.name} critically failed:')
                 logger.exception(e)
@@ -64,13 +81,6 @@ class EventProcessor(ABC):
     @abstractmethod
     def get_name(self) -> str:
         raise NotImplementedError
-
-    def set_subscription(self, subscription: EventStoreSubscription) -> None:
-        """Only one subscription currently allowed"""
-        if self.subscription is not None:
-            raise ValueError(f'Failed to set subscription for {self.name} - only one subspcription can be set for event processor.')
-        self._subscription = subscription
-        self._task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
 
     async def stop(self) -> None:
         if self.subscription is None:
@@ -88,6 +98,26 @@ class EventProcessor(ABC):
         self._subscription = None
         self._task = None
 
+    async def subscribe_to(self, event_store: EventStore) -> None:
+        # TODO - add ability to subscribe only to events required by application
+        if self.subscription is not None:
+            logger.info(f'Application {self.name} already have a running subscription.')
+            return
+
+        # TODO - think again about subscription and checkpoint names
+        subscription_name = f'{self.name}_subscription'
+        checkpoint_name = self._create_checkpoint_name(subscription_name)
+
+        checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
+        subscription = await event_store.create_subscription_to_all(
+            subscription_name=checkpoint.name,
+            start_position=checkpoint.value
+        )
+
+        self._subscription = subscription
+        self._task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
+        logger.info(f'Event processor {self.name} subscribed to event store.')
+
 
 class Application(EventProcessor):
     """
@@ -99,12 +129,12 @@ class Application(EventProcessor):
     interaction between multiple aggregates.
     """
 
-    def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
+    def __init__(self, repository: EventSourcedRepository, checkpoint_store: CheckpointStore):
         super().__init__(checkpoint_store=checkpoint_store)
-        self._repository = AsyncRepository(event_store=event_store)
+        self._repository = repository
 
     @property
-    def repository(self) -> AsyncRepository:
+    def repository(self) -> EventSourcedRepository:
         return self._repository
 
 

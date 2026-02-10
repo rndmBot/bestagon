@@ -75,7 +75,7 @@ class EventStore(ABC):
         return tuple(self._subscriptions)
 
     @abstractmethod
-    async def append_events(self, stream_name: str, events: List[NewStreamEvent]) -> None:
+    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent]) -> None:
         raise NotImplementedError
 
     @abstractmethod
