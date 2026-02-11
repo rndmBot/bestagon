@@ -98,7 +98,7 @@ class EventProcessor(ABC):
 
         checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
         subscription = await event_store.create_subscription_to_all(
-            subscription_name=checkpoint.name,
+            subscription_name=subscription_name,
             start_position=checkpoint.value
         )
 
