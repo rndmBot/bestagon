@@ -15,6 +15,8 @@ class EventSourcedSystem(ABC):
     # TODO - application graph
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
     # TODO - add possibility to rebuild projection
+    # TODO - add method to track health of the system (number of applications/projections running, etc)
+    # TODO - add telemetry
 
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         self._event_store = event_store

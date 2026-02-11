@@ -17,7 +17,7 @@ class DomainEventMetadata:
     # TODO - add trace_id
     # TODO - ORLY - inherit dict and use getters to get aggregate_id, version etc.
 
-    timestamp: str  # TODO - turn it into field to create automatically
+    timestamp: str  # TODO - turn it into field to create automatically  # TODO - also can be called audit_time - just a date and time when event occured
     aggregate_id: str
     aggregate_version: int
     aggregate_type: str
