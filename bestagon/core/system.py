@@ -3,10 +3,10 @@ from abc import ABC
 from typing import Any, Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.event_processor import Application, Projection, Command, Query
+from bestagon.core.event_processor import Application, Projection
 from bestagon.core.event_store import EventStore
 from bestagon.core.mapper import mapper
-
+from bestagon.core.message import Command, Query
 
 logger = logging.getLogger(__name__)
 

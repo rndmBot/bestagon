@@ -5,8 +5,8 @@ from typing import Type, Dict, Callable
 
 from bestagon.core.aggregate import Aggregate, DomainEvent, DomainEventMetadata
 from bestagon.core.event_store import StreamEvent, NewStreamEvent
-from bestagon.core.event_processor import Query, Command
 from bestagon.core.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError, HandlerAlreadyRegistered
+from bestagon.core.message import Query, Command
 
 
 class Mapper:
