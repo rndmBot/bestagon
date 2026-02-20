@@ -121,7 +121,6 @@ class Neo4jProjection(Projection):
                 result = await sess.run(check_cypher, database_name=self.database_name)
                 record = await result.single()
                 status = record.value()
-                print(status)
                 if status != 'online':
                     logger.info('Waiting for database')
                     await asyncio.sleep(1)
