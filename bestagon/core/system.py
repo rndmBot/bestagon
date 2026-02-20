@@ -1,5 +1,6 @@
 import logging
 from abc import ABC
+from dataclasses import dataclass
 from typing import Any, Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
@@ -11,11 +12,15 @@ from bestagon.core.message import Command, Query
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class SystemHealth:
+    application_status: Dict[str, bool]
+    projection_status: Dict[str, bool]
+
+
 class EventSourcedSystem(ABC):
     # TODO - application graph
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
-    # TODO - add possibility to rebuild projection
-    # TODO - add method to track health of the system (number of applications/projections running, etc)
     # TODO - add telemetry
 
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
@@ -79,6 +84,19 @@ class EventSourcedSystem(ABC):
         result = await query_handler(query)
         return result
 
+    def get_health(self) -> SystemHealth:
+        health = SystemHealth(
+            application_status={app.name: app.running for app in self.applications},
+            projection_status={proj.name: proj.running for proj in self.projections}
+        )
+        return health
+
+    def get_projection(self, name: str) -> Projection:
+        projection = self._projections.get(name)
+        if projection is None:
+            raise ValueError(f'No projection with name {name} found')
+        return projection
+
     async def initialize(self) -> None:
         self.register_command_handlers()
         self.register_query_handlers()
@@ -86,6 +104,15 @@ class EventSourcedSystem(ABC):
         self.register_event_types()
         await self.event_store.connect()
         await self.checkpoint_store.initialize()
+
+    async def rebuild_projection(self, name: str) -> None:
+        projection = self.get_projection(name)
+        checkpoint_name = projection.get_checkpoint_name()
+        await projection.stop()
+        await projection.drop()
+        await projection.checkpoint_store.delete_checkpoint(checkpoint_name)
+        await projection.subscribe_to(self.event_store)
+        logger.info(f'Projection {name} rebuild started')
 
     def register_aggregate_types(self) -> None:
         pass

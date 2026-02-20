@@ -2,7 +2,7 @@ import asyncio
 import logging
 from abc import abstractmethod, ABC
 from asyncio import CancelledError
-from typing import Union
+from typing import Union, Dict, Type, Callable
 
 from bestagon.core.aggregate import DomainEvent
 from bestagon.core.checkpoint_store import CheckpointStore, Checkpoint
@@ -28,6 +28,15 @@ class EventProcessor(ABC):
         return self.get_name()
 
     @property
+    def running(self) -> bool:
+        # TODO - there should be other way to check if event processor is running
+        if self._task is None:
+            return False
+        if self._task.done():
+            return False
+        return True
+
+    @property
     def subscription(self) -> Union[EventStoreSubscription, None]:
         return self._subscription
 
@@ -36,13 +45,23 @@ class EventProcessor(ABC):
         return self._task
 
     @abstractmethod
-    async def process_event(self, event: DomainEvent) -> None:
+    def get_event_routing(self) -> Dict[Type[DomainEvent], Callable]:
         """Reimplement to provide reaction to the specific domain event"""
         raise NotImplementedError
 
-    @staticmethod
-    def _create_checkpoint_name(subscription_name: str) -> str:
-        return f'{subscription_name}_checkpoint'
+    def get_checkpoint_name(self) -> str:
+        return f'{self.get_subscription_name()}_checkpoint'
+
+    def get_subscription_name(self) -> str:
+        return f'{self.get_name()}_subscription'
+
+    async def process_event(self, event: DomainEvent) -> None:
+        routing = self.get_event_routing()
+        if not routing:
+            logger.warning(f'Empty event routing for event_processor {self.name}')
+        handler = routing.get(type(event))
+        if handler is not None:
+            await handler(event)
 
     async def _consume_subscription(self) -> None:
         while self.subscription.running:
@@ -50,7 +69,7 @@ class EventProcessor(ABC):
                 stream_event = await self.subscription.next_event()
                 domain_event = mapper.to_domain_event(stream_event)
                 checkpoint = Checkpoint(
-                    name=self._create_checkpoint_name(self.subscription.name),
+                    name=self.get_checkpoint_name(),
                     value=stream_event.commit_position
                 )  # TODO - find da proppa wei to generate checkpoints
 
@@ -87,18 +106,26 @@ class EventProcessor(ABC):
         self._task = None
 
     async def subscribe_to(self, event_store: EventStore) -> None:
-        # TODO - add ability to subscribe only to events required by application
         if self.subscription is not None:
-            logger.info(f'Application {self.name} already have a running subscription.')
+            logger.info(f'Event processor {self.name} already have a running subscription.')
             return
 
-        # TODO - think again about subscription and checkpoint names
-        subscription_name = f'{self.name}_subscription'
-        checkpoint_name = self._create_checkpoint_name(subscription_name)
+        event_types = list()
+        for event_class in self.get_event_routing().keys():
+            types = mapper.get_event_types(event_class)
+            event_types.extend(types)
+
+        if not event_types:
+            logger.warning(f'Subscription cancelled. Event processor {self.name} have no declared events to listen to.')
+            return
+
+        subscription_name = self.get_subscription_name()
+        checkpoint_name = self.get_checkpoint_name()
 
         checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
-        subscription = await event_store.create_subscription_to_all(
+        subscription = await event_store.create_subscription_to_events(
             subscription_name=subscription_name,
+            events=event_types,
             start_position=checkpoint.value
         )
 
@@ -131,7 +158,7 @@ class Projection(EventProcessor):
     # TODO - Projection stats should be accessed through REST API http://localhost/projectionStats/CountByDocument
 
     @abstractmethod
-    def drop(self) -> None:
+    async def drop(self) -> None:
         """There should be functionality to drop projection and rebuild it from scratch"""
         raise NotImplementedError
 

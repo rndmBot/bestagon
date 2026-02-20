@@ -14,7 +14,7 @@ class Checkpoint:
         if not self.name:
             raise ValueError('Checkpoint name should be a non empty string')
         if not isinstance(self.value, int):
-            raise TypeError('Chckpoint value should be an integer')
+            raise TypeError('Checkpoint value should be an integer')
         if self.value < 0:
             raise ValueError('Checkpoint value should be a positive integer')
 

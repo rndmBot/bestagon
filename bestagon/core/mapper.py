@@ -1,7 +1,8 @@
 import inspect
 import json
+from collections import defaultdict
 from dataclasses import asdict
-from typing import Type, Dict, Callable
+from typing import Type, Dict, Callable, List
 
 from bestagon.core.aggregate import Aggregate, DomainEvent, DomainEventMetadata
 from bestagon.core.event_store import StreamEvent, NewStreamEvent
@@ -10,13 +11,18 @@ from bestagon.core.message import Query, Command
 
 
 class Mapper:
-    # TODO - ORLY - add possibility to pass custom serializer???
+    """
+    There can be multiple event types for a single event. This feature is added to fix the situation when there are several event types in event store
+    for the same event because of technical error or mistake, in such case the event can be successfully reconstructed.
+    When event with multiple types is serialized, the first registered type will be used as an event type.
+    """
 
     def __init__(self):
         self._aggregate_class_map: Dict[str, Type[Aggregate]] = dict()
 
         self._event_class_map: Dict[str, Type[DomainEvent]] = dict()
-        self._event_type_map: Dict[Type[DomainEvent], str] = dict()
+        self._event_type_map: Dict[Type[DomainEvent], List[str]] = defaultdict(list)
+
         self._query_handler_map: Dict[Type[Query], Callable] = dict()
         self._command_handler_map: Dict[Type[Command], Callable] = dict()
 
@@ -36,9 +42,13 @@ class Mapper:
         raise TypeNotRegisteredError(f'No event class registered for event type: {event_type}')
 
     def get_event_type(self, event_class: Type[DomainEvent]) -> str:
-        if event_class in self._event_type_map:
-            return self._event_type_map[event_class]
-        raise TypeNotRegisteredError(f'No event type registered for event class: {event_class}')
+        return self.get_event_types(event_class)[0]
+
+    def get_event_types(self, event_class: Type[DomainEvent]) -> List[str]:
+        event_types = self._event_type_map.get(event_class)
+        if not event_types:
+            raise TypeNotRegisteredError(f'No event types registered for event {event_class}')
+        return event_types
 
     def get_query_handler(self, query_type: Type[Query]) -> Callable:
         if query_type not in self._query_handler_map:
@@ -64,7 +74,7 @@ class Mapper:
         if event_type in self._event_class_map:
             raise TypeAlreadyRegisteredError(f'Type {event_type} already registered for event {self._event_class_map[event_type]}')
         self._event_class_map[event_type] = event_class
-        self._event_type_map[event_class] = event_type
+        self._event_type_map[event_class].append(event_type)
 
     def register_command_handler(self, command_type: Type[Command], handler: Callable) -> None:
         if command_type in self._command_handler_map:
