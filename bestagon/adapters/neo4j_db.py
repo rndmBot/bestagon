@@ -1,9 +1,12 @@
+import asyncio
 import logging
+from abc import abstractmethod
 from typing import Tuple
 
 import neo4j
 
 from bestagon.core.checkpoint_store import CheckpointStore, Checkpoint
+from bestagon.core.event_processor import Projection
 
 logger = logging.getLogger(__name__)
 
@@ -89,3 +92,49 @@ class Neo4jCheckpointStore(CheckpointStore):
                 value=checkpoint.value
             )
         logger.debug(f'New checkpoint set for {checkpoint.name}: {checkpoint.value}')
+
+
+class Neo4jProjection(Projection):
+    def __init__(self, driver: neo4j.AsyncDriver, checkpoint_store: CheckpointStore):
+        super().__init__(checkpoint_store=checkpoint_store)
+        self.driver = driver
+
+    @property
+    def database_name(self) -> str:
+        return self.get_database_name()
+
+    async def drop(self) -> None:
+        # TODO - indexes
+        logger.info(f'Dropping projection {self.name}...')
+        cypher = '''CREATE OR REPLACE DATABASE $database_name'''
+        check_cypher = '''
+        SHOW DATABASES
+        YIELD name, currentStatus
+        WHERE name = $database_name
+        RETURN currentStatus AS status
+        '''
+        async with self.driver.session() as sess:
+            await sess.run(cypher, database_name=self.database_name)
+
+            logger.info('Checking database created')
+            while True:
+                result = await sess.run(check_cypher, database_name=self.database_name)
+                record = await result.single()
+                status = record.value()
+                print(status)
+                if status != 'online':
+                    logger.info('Waiting for database')
+                    await asyncio.sleep(1)
+                else:
+                    logger.info(f'Database created')
+                    break
+
+    @abstractmethod
+    def get_database_name(self) -> str:
+        raise NotImplementedError
+
+    async def initialize(self) -> None:
+        # TODO - indexes
+        cypher = '''CREATE DATABASE $database_name IF NOT EXISTS'''
+        async with self.driver.session() as sess:
+            await sess.run(cypher, database_name=self.database_name)
