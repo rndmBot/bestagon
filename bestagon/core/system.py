@@ -1,6 +1,7 @@
 import logging
 from abc import ABC
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
@@ -12,8 +13,14 @@ from bestagon.core.message import Command, Query
 logger = logging.getLogger(__name__)
 
 
+class SystemStatus(Enum):
+    ONLINE = 'online'
+    WARNING = 'warning'
+
+
 @dataclass(frozen=True)
 class SystemHealth:
+    status: SystemStatus
     application_status: Dict[str, bool]
     projection_status: Dict[str, bool]
 
@@ -85,7 +92,18 @@ class EventSourcedSystem(ABC):
         return result
 
     def get_health(self) -> SystemHealth:
+        running_apps = sum([app.running for app in self.applications])
+        running_projs = sum([proj.running for proj in self.projections])
+
+        if running_apps != len(self.applications):
+            status = SystemStatus.WARNING
+        elif running_projs != len(self.projections):
+            status = SystemStatus.WARNING
+        else:
+            status = SystemStatus.ONLINE
+
         health = SystemHealth(
+            status=status,
             application_status={app.name: app.running for app in self.applications},
             projection_status={proj.name: proj.running for proj in self.projections}
         )
