@@ -17,7 +17,7 @@ class EventProcessor(ABC):
     def __init__(self, checkpoint_store: CheckpointStore):
         self._checkpoint_store = checkpoint_store
         self._subscription: Union[EventStoreSubscription, None] = None
-        self._task: Union[asyncio.Task, None] = None
+        self._subscription_task: Union[asyncio.Task, None] = None
 
     @property
     def checkpoint_store(self) -> CheckpointStore:
@@ -29,20 +29,13 @@ class EventProcessor(ABC):
 
     @property
     def running(self) -> bool:
-        # TODO - there should be other way to check if event processor is running
-        if self._task is None:
-            return False
-        if self._task.done():
-            return False
-        return True
+        if self.subscription is None:
+            return True
+        return self.subscription.running
 
     @property
     def subscription(self) -> Union[EventStoreSubscription, None]:
         return self._subscription
-
-    @property
-    def task(self) -> Union[asyncio.Task, None]:
-        return self._task
 
     @abstractmethod
     def get_event_routing(self) -> Dict[Type[DomainEvent], Callable]:
@@ -71,7 +64,7 @@ class EventProcessor(ABC):
                 checkpoint = Checkpoint(
                     name=self.get_checkpoint_name(),
                     value=stream_event.commit_position
-                )  # TODO - find da proppa wei to generate checkpoints
+                )
 
                 # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executed in a single transaction (how??? there are no Trasactions in event sourcing)
                 # TODO - on exception system should be stoped
@@ -83,6 +76,7 @@ class EventProcessor(ABC):
             except Exception as e:
                 logger.warning(f'ACHTUNG - event processor {self.name} critically failed:')
                 logger.exception(e)
+                await self.subscription.stop()
                 raise e
 
     @abstractmethod
@@ -92,18 +86,18 @@ class EventProcessor(ABC):
     async def stop(self) -> None:
         if self.subscription is None:
             return
-
-        await self.subscription.stop()  # TODO - subscription should be deleted when stopped
-        if not self._task.done():
-            self._task.cancel()
+        if self.subscription.running:
+            await self.subscription.stop()
+        if not self._subscription_task.done():
+            self._subscription_task.cancel()
 
         try:
-            await self._task
+            await self._subscription_task
         except CancelledError:
-            logger.debug(f'Task {self._task.get_name()} cancelled')
+            logger.debug(f'Task {self._subscription_task.get_name()} cancelled')
 
         self._subscription = None
-        self._task = None
+        self._subscription_task = None
 
     async def subscribe_to(self, event_store: EventStore) -> None:
         if self.subscription is not None:
@@ -130,7 +124,7 @@ class EventProcessor(ABC):
         )
 
         self._subscription = subscription
-        self._task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
+        self._subscription_task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
         logger.info(f'Event processor {self.name} subscribed to event store.')
 
 
