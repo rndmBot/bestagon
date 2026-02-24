@@ -29,6 +29,9 @@ class EventProcessor(ABC):
 
     @property
     def running(self) -> bool:
+        # TODO - there should be other way to check if event processor is running
+        if self._task is None:
+            return False
         if self._task.done():
             return False
         return True
