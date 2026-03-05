@@ -29,6 +29,7 @@ class DomainEventMetadata:
 
 @dataclass(frozen=True)
 class DomainEvent:
+    # TODO - make things simple - event should contain metadata and data (separate class)
     metadata: DomainEventMetadata
 
     def get_metadata_as_dict(self) -> dict:
