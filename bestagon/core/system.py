@@ -1,21 +1,34 @@
 import logging
 from abc import ABC
+from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Tuple, Dict
 
 from bestagon.core.checkpoint_store import CheckpointStore
-from bestagon.core.event_processor import Application, Projection, EventProcessor
-from bestagon.core.event_store import EventStore, ApplicationSubscription
+from bestagon.core.event_processor import Application, Projection
+from bestagon.core.event_store import EventStore
 from bestagon.core.mapper import mapper
 from bestagon.core.message import Command, Query
 
-
 logger = logging.getLogger(__name__)
+
+
+class SystemStatus(Enum):
+    ONLINE = 'online'
+    WARNING = 'warning'
+
+
+@dataclass(frozen=True)
+class SystemHealth:
+    status: SystemStatus
+    application_status: Dict[str, bool]
+    projection_status: Dict[str, bool]
 
 
 class EventSourcedSystem(ABC):
     # TODO - application graph
     # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
-    # TODO - add possibility to rebuild projection
+    # TODO - add telemetry
 
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         self._event_store = event_store
@@ -41,28 +54,18 @@ class EventSourcedSystem(ABC):
         projs = tuple(self._projections.values())
         return projs
 
-    async def _subscribe_event_processor(self, event_processor: EventProcessor) -> None:
-        if isinstance(event_processor, Projection):
-            await event_processor.initialize()
-
-        checkpoint_name = f'{event_processor.name}_subscription'
-        checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
-        es_subscription = await self.event_store.create_subscription_to_all(subscription_id=checkpoint_name, start_position=checkpoint)
-        app_subscription = ApplicationSubscription(subscription_id=es_subscription.subscription_id, event_store_subscription=es_subscription)
-        event_processor.set_subscription(app_subscription)
-        logger.info(f'Event processor {event_processor.name} with subscription {checkpoint_name} added')
-
     async def add_application(self, app: Application) -> None:
         if app.name in self._applications:
             raise ValueError(f'Application with name {app.name} have already been added to the system')
-        await self._subscribe_event_processor(event_processor=app)
+        await app.subscribe_to(self.event_store)
         self._applications[app.name] = app
         # TODO - the system should stop if there is a failure in any application
 
     async def add_projection(self, proj: Projection) -> None:
         if proj.name in self._projections:
             raise ValueError(f'Projection with name {proj.name} have already been added to the system')
-        await self._subscribe_event_processor(event_processor=proj)
+        await proj.initialize()
+        await proj.subscribe_to(self.event_store)
         self._projections[proj.name] = proj
 
     @staticmethod
@@ -88,6 +91,30 @@ class EventSourcedSystem(ABC):
         result = await query_handler(query)
         return result
 
+    def get_health(self) -> SystemHealth:
+        running_apps = sum([app.running for app in self.applications])
+        running_projs = sum([proj.running for proj in self.projections])
+
+        if running_apps != len(self.applications):
+            status = SystemStatus.WARNING
+        elif running_projs != len(self.projections):
+            status = SystemStatus.WARNING
+        else:
+            status = SystemStatus.ONLINE
+
+        health = SystemHealth(
+            status=status,
+            application_status={app.name: app.running for app in self.applications},
+            projection_status={proj.name: proj.running for proj in self.projections}
+        )
+        return health
+
+    def get_projection(self, name: str) -> Projection:
+        projection = self._projections.get(name)
+        if projection is None:
+            raise ValueError(f'No projection with name {name} found')
+        return projection
+
     async def initialize(self) -> None:
         self.register_command_handlers()
         self.register_query_handlers()
@@ -95,6 +122,15 @@ class EventSourcedSystem(ABC):
         self.register_event_types()
         await self.event_store.connect()
         await self.checkpoint_store.initialize()
+
+    async def rebuild_projection(self, name: str) -> None:
+        projection = self.get_projection(name)
+        checkpoint_name = projection.get_checkpoint_name()
+        await projection.stop()
+        await projection.drop()
+        await projection.checkpoint_store.delete_checkpoint(checkpoint_name)
+        await projection.subscribe_to(self.event_store)
+        logger.info(f'Projection {name} rebuild started')
 
     def register_aggregate_types(self) -> None:
         pass

@@ -1,103 +1,21 @@
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class Message:
-    pass
+class Command:
+    """
+    A fundamental concept of event sourcing that is easily overlooked: commands are inextricably linked to the state of the world at the time the command was created.
+    Even more plainly: never enqueue commands. The instant that command is enqueued it becomes irrelevant because the state of the world has moved on.
+    Instead of enqueuing them, commands should be be processed via request/reply. A live service should handle the command request, validate it as of the current state,
+    and reject it accordingly or return a list of events. Not only does this give our application the chance to get more robust error messages as to why a command was rejected,
+    but it also ensures that bad commands can't produce events. There will never exist an event produced from a stale command.
 
-
-@dataclass(frozen=True)
-class Command(Message):
+    Source: https://blog.cosmonic.com/engineering/commands-are-not-real/
+    """
     # TODO - commands sent through a command bus should allow the result to be returned
     pass
 
 
 @dataclass(frozen=True)
-class Query(Message):
+class Query:
     pass
-
-
-@dataclass(frozen=True)
-class DomainEventMetadata:
-    """
-    DO NOT base business decisions on metadata
-    The correlation_id of a message always references the identifier of the message it originates from (that is, the parent message).
-    The trace_id on the other hand references to the message identifier which started the chain of messages (that is, the root message).
-    """
-    # TODO - add correlation_id
-    # TODO - add trace_id
-    # TODO - ORLY - inherit dict and use getters to get aggregate_id, version etc.
-
-    timestamp: str  # TODO - turn it into field to create automatically
-    aggregate_id: str
-    aggregate_version: int
-    aggregate_type: str
-
-    @staticmethod
-    def create_timestamp() -> str:
-        return datetime.now(timezone.utc).isoformat()
-
-
-@dataclass(frozen=True)
-class DomainEvent:
-    # TODO - inherit from Message
-    metadata: DomainEventMetadata
-
-    def get_metadata_as_dict(self) -> dict:
-        return asdict(self.metadata)
-
-    def get_payload(self) -> dict:
-        payload = asdict(self).copy()
-        payload.pop('metadata')
-        return payload
-
-
-@dataclass(frozen=True)
-class Created(DomainEvent):
-    pass
-
-
-@dataclass(frozen=True)
-class ApplicationEvent:
-    # TODO - ORLY - inherit from Message???
-    commit_position: int
-    domain_event: DomainEvent
-
-
-@dataclass(frozen=True)
-class NewStreamEvent:
-    """New event to store in event store"""
-    stream_position: int  # Position in aggreate sequence
-    event_type: str
-    payload: bytes
-    metadata: bytes
-
-
-@dataclass(frozen=True)
-class StreamEvent:
-    """Event retreived from EventStore"""
-    stream_name: str
-    stream_position: int  # Position in aggreate sequence
-    commit_position: int  # Position in event store sequence
-    event_type: str
-    payload: bytes
-    metadata: bytes
-
-    def __eq__(self, other):
-        # TODO - ORLY???
-        if isinstance(other, StreamEvent):
-            eq = all(
-                [
-                    self.stream_name == other.stream_name,
-                    self.stream_position == other.stream_position
-                ]
-            )
-            return eq
-        return NotImplemented
-
-    def __lt__(self, other):
-        # TODO - ORLY???
-        if isinstance(other, StreamEvent):
-            return self.stream_position < other.stream_position
-        return NotImplemented

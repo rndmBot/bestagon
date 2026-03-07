@@ -1,10 +1,51 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 from typing import List, Tuple
 
-from bestagon.core.message import DomainEvent, Created
 from bestagon.core.exceptions import AggregateIDMismatch, AggregateVersionError
+
+
+@dataclass(frozen=True)
+class DomainEventMetadata:
+    """
+    DO NOT base business decisions on metadata
+    The correlation_id of a message always references the identifier of the message it originates from (that is, the parent message).
+    The trace_id on the other hand references to the message identifier which started the chain of messages (that is, the root message).
+    """
+    # TODO - add correlation_id
+    # TODO - add trace_id
+    # TODO - ORLY - inherit dict and use getters to get aggregate_id, version etc.
+
+    timestamp: str  # TODO - turn it into field to create automatically  # TODO - also can be called audit_time - just a date and time when event occured
+    aggregate_id: str
+    aggregate_version: int
+    aggregate_type: str
+
+    @staticmethod
+    def create_timestamp() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass(frozen=True)
+class DomainEvent:
+    # TODO - make things simple - event should contain metadata and data (separate class)
+    metadata: DomainEventMetadata
+
+    def get_metadata_as_dict(self) -> dict:
+        # TODO - ORLY???
+        return asdict(self.metadata)
+
+    def get_payload(self) -> dict:
+        # TODO - ORLY???
+        payload = asdict(self).copy()
+        payload.pop('metadata')
+        return payload
+
+
+@dataclass(frozen=True)
+class Created(DomainEvent):
+    pass
 
 
 class Aggregate(ABC):

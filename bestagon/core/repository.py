@@ -2,16 +2,15 @@ import logging
 from itertools import pairwise
 from typing import List
 
-from bestagon.core.aggregate import Aggregate
+from bestagon.core.aggregate import Aggregate, DomainEvent
 from bestagon.core.mapper import mapper
-from bestagon.core.message import DomainEvent
 from bestagon.core.event_store import EventStore
 from bestagon.core.exceptions import AggregateNotFoundError, IntegrityError
 
 logger = logging.getLogger(__name__)
 
 
-class AsyncRepository:
+class EventSourcedRepository:
     def __init__(self, event_store: EventStore):
         self._event_store = event_store
 
@@ -68,11 +67,7 @@ class AsyncRepository:
             logger.debug(f'{aggregate.aggregate_id}: {versions}')
             raise IntegrityError('Invalid aggregate version: each aggregate event should have version exactly one more than previous.')
 
-        new_stored_events = list()
-        for domain_event in aggregate.pending_events:
-            new_stored_event = mapper.to_new_stream_event(domain_event=domain_event)
-            new_stored_events.append(new_stored_event)
-
+        new_stored_events = tuple(mapper.to_new_stream_event(domain_event) for domain_event in aggregate.pending_events)
         stream_name = self._create_stream_name(aggregate_type=aggregate.get_aggregate_type(), aggregate_id=aggregate.aggregate_id)
         await self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
         aggregate.clear_events()
