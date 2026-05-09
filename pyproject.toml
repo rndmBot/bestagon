@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bestagon"
-version = "0.6.2"
+version = "0.7.0"
 authors = [
   {name="Aleksandr Antonov", email="antonov.o779@gmail.com"},
 ]
-description = "DDD+ES+CQRS framework for python"
+description = "Framework for event-sourcing with Python (DDD + ES + CQRS)"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
