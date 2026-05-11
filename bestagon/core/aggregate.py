@@ -9,15 +9,11 @@ from bestagon.core.exceptions import AggregateIDMismatch, AggregateVersionError
 @dataclass(frozen=True)
 class DomainEventMetadata:
     """
-    DO NOT base business decisions on metadata
-    The correlation_id of a message always references the identifier of the message it originates from (that is, the parent message).
-    The trace_id on the other hand references to the message identifier which started the chain of messages (that is, the root message).
+    Contains the data that is not related to the business domain.
+    DO NOT base business decisions on metadata.
     """
-    # TODO - add correlation_id
-    # TODO - add trace_id
-    # TODO - ORLY - inherit dict and use getters to get aggregate_id, version etc.
 
-    timestamp: str  # TODO - turn it into field to create automatically  # TODO - also can be called audit_time - just a date and time when event occured
+    timestamp: str
     aggregate_id: str
     aggregate_version: int
     aggregate_type: str
@@ -29,15 +25,9 @@ class DomainEventMetadata:
 
 @dataclass(frozen=True)
 class DomainEvent:
-    # TODO - make things simple - event should contain metadata and data (separate class)
     metadata: DomainEventMetadata
 
-    def get_metadata_as_dict(self) -> dict:
-        # TODO - ORLY???
-        return asdict(self.metadata)
-
     def get_payload(self) -> dict:
-        # TODO - ORLY???
         payload = asdict(self).copy()
         payload.pop('metadata')
         return payload
@@ -115,11 +105,6 @@ class Aggregate(ABC):
 
     Next step - application module.
     """
-
-    # TODO - register aggregate type automatically
-    # TODO - event handlers take events as input and change the aggregate state
-    # TODO - command handlers take commands as input, validate business logic and trigger events
-    # TODO - aggregate state changes should occur only in event handlers, NOT command handlers, how to protect aggregate from occasional state change in command handler???
 
     INITIAL_VERSION = 0
 

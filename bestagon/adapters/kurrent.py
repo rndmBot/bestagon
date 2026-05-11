@@ -33,7 +33,7 @@ class KurrentDBSubscriptionParameters(SubscriptionParameters):
     credentials: Union[grpc.CallCredentials, None] = None
 
 
-class AsyncKurrentDBSubscription(EventStoreSubscription):
+class KurrentDBSubscription(EventStoreSubscription):
     def __init__(self, name: str, parameters: KurrentDBSubscriptionParameters, kdb_subscription: AsyncCatchupSubscription):
         super().__init__(name=name, parameters=parameters)
         self._kdb_subscription = kdb_subscription
@@ -59,7 +59,7 @@ class AsyncKurrentDBSubscription(EventStoreSubscription):
             await self._kdb_subscription.stop()
 
 
-class AsyncKurrentDBEventStore(EventStore):
+class KurrentDBEventStore(EventStore):
     def __init__(self, client: AsyncKurrentDBClient):
         super().__init__()
         self.client = client
@@ -97,7 +97,7 @@ class AsyncKurrentDBEventStore(EventStore):
         logger.info('Event store connected')
 
     async def create_subscription(self, subscription_name: str,
-                                  subscription_parameters: KurrentDBSubscriptionParameters) -> AsyncKurrentDBSubscription:
+                                  subscription_parameters: KurrentDBSubscriptionParameters) -> KurrentDBSubscription:
         kdb_subscription = await self.client.subscribe_to_all(
             commit_position=subscription_parameters.commit_position,
             from_end=subscription_parameters.from_end,
@@ -115,7 +115,7 @@ class AsyncKurrentDBEventStore(EventStore):
         )
         kdb_subscription = cast(AsyncCatchupSubscription, kdb_subscription)
 
-        subscription = AsyncKurrentDBSubscription(name=subscription_name, parameters=subscription_parameters, kdb_subscription=kdb_subscription)
+        subscription = KurrentDBSubscription(name=subscription_name, parameters=subscription_parameters, kdb_subscription=kdb_subscription)
         self._subscriptions.append(subscription)
         return subscription
 

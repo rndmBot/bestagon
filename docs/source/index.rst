@@ -7,14 +7,9 @@
 Welcome to Bestagon
 =======================
 
-Bestagon - is an asynchronous framework for event-sourced applications.
-
-Its main purpose is to provide an efficient way to develop event-driven microservices
-according to hexagonal (clean, ports and adapters) architecture.
-
-It can be useful for anyone who is interested in Domain Driven Design (DDD) combined
-with event-sourcing and CQRS, and provides all necessary blocks to build a scalable,
-reactive system:
+Bestagon - is an asynchronous framework for event-sourcing in Python. It provides fast and easy way
+to build event-sourced applications according to hexagonal architecture and following DDD+ES+CQRS
+concepts:
 
 - Event-sourced aggregates.
 - Persistence mechanism using event-sourced repository.
@@ -39,8 +34,10 @@ Supported Python versions
 The library is compatible with Python of versions >= 3.10
 
 
+The project is hosted on GitHub - https://github.com/rndmBot/bestagon
+
+
 .. toctree::
    :maxdepth: 2
 
-   topics/acknowledgments
    topics/tutorial
