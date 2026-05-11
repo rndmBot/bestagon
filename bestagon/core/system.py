@@ -26,10 +26,6 @@ class SystemHealth:
 
 
 class EventSourcedSystem(ABC):
-    # TODO - application graph
-    # TODO - split workflow into two parts - application workflow (write side) and projection workflow (read side)
-    # TODO - add telemetry
-
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         self._event_store = event_store
         self._checkpoint_store = checkpoint_store

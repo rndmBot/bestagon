@@ -6,15 +6,16 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import sys
+from datetime import date
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parents[2]
 sys.path.append(str(BASE_DIR / 'bestagon'))
 
 project = 'bestagon'
-copyright = '2026, Aleksandr Antonov'
+copyright = f'{date.today().year}, Aleksandr Antonov'
 author = 'Aleksandr Antonov'
-release = '0.6.2'
+release = '0.7.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

@@ -148,12 +148,20 @@ class Application(EventProcessor):
 
 
 class Projection(EventProcessor):
+    """
+    The event store contains all the events that happened in the system, it is so called source of truth that shows what have
+    happened in the past, but it is difficult and not practical to query event store and get insights about the state of the system.
+    The Projection class solves this problem by giving a possibility to create optimized read models that can be used to provide different kinds of information
+    about the system and can be easily queried using different query languages like SQL, Cypher etc.
+    """
     # TODO - Projections should give a possibility to provide stats about how it is doing
     # TODO - Projection stats should be accessed through REST API http://localhost/projectionStats/CountByDocument
 
     @abstractmethod
     async def drop(self) -> None:
-        """There should be functionality to drop projection and rebuild it from scratch"""
+        """
+        Reimplement to provide logic of removing all the data from the projection.
+        """
         raise NotImplementedError
 
     async def initialize(self) -> None:

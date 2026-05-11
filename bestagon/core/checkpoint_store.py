@@ -10,7 +10,7 @@ class Checkpoint:
 
     def __post_init__(self):
         if not isinstance(self.name, str):
-            raise TypeError('Checkpoint name should a string')
+            raise TypeError('Checkpoint name should be a string')
         if not self.name:
             raise ValueError('Checkpoint name should be a non empty string')
         if not isinstance(self.value, int):
@@ -20,6 +20,13 @@ class Checkpoint:
 
 
 class CheckpointStore(ABC):
+    """
+    Abstract interface for checkpoint store.
+    The checkpoint store's main purpose is to store the position of a last processed event for the application.
+    This class should not be instantiated directly, instead it should be inherited to create a database-specific implementation
+    of checkpoint store by implementing all abstract methods.
+    """
+
     @abstractmethod
     async def close(self) -> None:
         raise NotImplementedError
