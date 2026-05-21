@@ -1,5 +1,5 @@
-Bestagon's concepts
-===================
+Concepts
+========
 
 This topic covers the basic concepts of Bestagon framework.
 
