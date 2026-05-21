@@ -48,6 +48,7 @@ The project is hosted on GitHub - https://github.com/rndmBot/bestagon
 .. toctree::
    :maxdepth: 2
 
+   topics/concepts
    topics/tutorial
    topics/support
    topics/examples
