@@ -52,3 +52,7 @@ The project is hosted on GitHub - https://github.com/rndmBot/bestagon
    topics/tutorial
    topics/support
    topics/examples
+
+
+.. meta::
+   :google-site-verification: nP1zSJ35h6KfS8gFSqm2nKH2hUIc-j6MCLP6_GWmlKw
