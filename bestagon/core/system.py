@@ -26,6 +26,8 @@ class SystemHealth:
 
 
 class EventSourcedSystem(ABC):
+    # TODO - IDEA - make add_application/projection synchronous and add apps to queue, on initialization it should be consumed and apps should be initialized
+
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         self._event_store = event_store
         self._checkpoint_store = checkpoint_store
