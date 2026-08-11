@@ -71,6 +71,7 @@ class KurrentDBSubscription(EventStoreSubscription):
 class KurrentDBEventStore(EventStore):
     def __init__(self, client: AsyncKurrentDBClient):
         super().__init__()
+        self._subscriptions: List[KurrentDBSubscription] = list()
         self.client = client
 
     async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent]) -> None:
@@ -86,8 +87,8 @@ class KurrentDBEventStore(EventStore):
         await self.client.append_events(stream_name=stream_name, current_version=current_version, events=new_events)
 
     async def close(self) -> None:
-        if self. subscriptions:
-            await asyncio.gather(*[sub.stop() for sub in self.subscriptions])
+        if self.get_subscriptions():
+            await asyncio.gather(*[sub.stop() for sub in self.get_subscriptions()])
             logger.info('All subscriptions stopped')
 
         await self.client.close()
@@ -126,11 +127,11 @@ class KurrentDBEventStore(EventStore):
         sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
         return sub
 
-    async def create_subscription_to_events(self, subscription_name: str, events: List[str],
+    async def create_subscription_to_events(self, subscription_name: str, event_types: List[str],
                                             start_position: int) -> 'EventStoreSubscription':
         params = KurrentDBSubscriptionParameters(
             commit_position=start_position,
-            filter_include=events,
+            filter_include=event_types,
             filter_by_stream_name=False
         )
         sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
@@ -164,6 +165,9 @@ class KurrentDBEventStore(EventStore):
             )
             stream_events.append(stream_event)
         return tuple(stream_events)
+
+    def get_subscriptions(self) -> Tuple[KurrentDBSubscription, ...]:
+        return tuple(self._subscriptions)
 
     async def stream_exists(self, stream_name: str) -> bool:
         try:

@@ -50,3 +50,10 @@ Issues = "https://github.com/rndmBot/bestagon/issues"
 
 [tool.uv.build-backend]
 module-root = ""
+
+[dependency-groups]
+dev = [
+    "kurrentdbclient>=1.3.3",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]

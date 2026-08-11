@@ -231,6 +231,7 @@ class AIOSQLiteEventStore(EventStore):
         super().__init__()
         self._database = database
         self._connection: aiosqlite.Connection = None
+        self._subscriptions: List[AIOSQLiteEventStoreSubscription] = list()
 
     async def _get_last_commit_position(self) -> int | None:
         sql = '''SELECT MAX(commit_position) AS last_commit_position FROM events'''
@@ -331,7 +332,7 @@ class AIOSQLiteEventStore(EventStore):
 
     async def close(self) -> None:
         logger.info(f'Closing {self.__class__.__qualname__}')
-        for subscription in self.subscriptions:
+        for subscription in self.get_subscriptions():
             await subscription.stop()
         if self._connection is not None:
             await self._connection.close()
@@ -353,10 +354,11 @@ class AIOSQLiteEventStore(EventStore):
         subscription = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=parameters)
         return subscription
 
-    async def create_subscription_to_events(self, subscription_name: str, events: List[str], start_position: int) -> 'AIOSQLiteEventStoreSubscription':
+    async def create_subscription_to_events(self, subscription_name: str, event_types: List[str],
+                                            start_position: int) -> 'AIOSQLiteEventStoreSubscription':
         parameters = AIOSQLiteSubscriptionParameters(
             commit_position=start_position,
-            event_types=events
+            event_types=event_types
         )
         subscription = await self.create_subscription(
             subscription_name=subscription_name,
@@ -409,6 +411,9 @@ class AIOSQLiteEventStore(EventStore):
 
         stream_version = result[0]
         return stream_version
+
+    def get_subscriptions(self) -> Tuple[AIOSQLiteEventStoreSubscription, ...]:
+        return tuple(self._subscriptions)
 
     async def stream_exists(self, stream_name: str) -> bool:
         # TODO - logs
