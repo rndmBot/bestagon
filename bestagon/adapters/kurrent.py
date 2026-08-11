@@ -10,7 +10,6 @@ from kurrentdbclient.exceptions import NotFoundError
 
 from bestagon.core.event_store import EventStore, SubscriptionParameters, EventStoreSubscription, StreamEvent, \
     NewStreamEvent
-from bestagon.core.exceptions import IntegrityError
 
 
 logger = logging.getLogger(__name__)
@@ -34,12 +33,17 @@ class KurrentDBSubscriptionParameters(SubscriptionParameters):
 
 
 class KurrentDBSubscription(EventStoreSubscription):
-    def __init__(self, name: str, parameters: KurrentDBSubscriptionParameters, kdb_subscription: AsyncCatchupSubscription):
-        super().__init__(name=name, parameters=parameters)
+    def __init__(self, name: str, kdb_subscription: AsyncCatchupSubscription):
+        super().__init__(name=name)
         self._kdb_subscription = kdb_subscription
+        self._running = False
+
+    def is_running(self) -> bool:
+        return self._running
 
     async def next_event(self) -> StreamEvent:
-        if not self.running:
+        # TODO - exception handling
+        if not self._running:
             raise StopAsyncIteration
 
         event = await anext(self._kdb_subscription)
@@ -53,8 +57,13 @@ class KurrentDBSubscription(EventStoreSubscription):
         )
         return stream_event
 
+    async def start(self) -> None:
+        # TODO - logs
+        self._running = True
+
     async def stop(self) -> None:
-        if self.running:
+        # TODO - logs
+        if self._running:
             self._running = False
             await self._kdb_subscription.stop()
 
@@ -65,14 +74,6 @@ class KurrentDBEventStore(EventStore):
         self.client = client
 
     async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent]) -> None:
-        current_version = await self.client.get_current_version(stream_name=stream_name)
-        first_event = events[0]
-        if current_version == StreamState.NO_STREAM:
-            if first_event.stream_position != 0:
-                raise IntegrityError('Failed to append event to non existent stream, events position should start from 0')
-        elif first_event.stream_position <= current_version:
-            raise IntegrityError(f'Failed to append events in stream {stream_name} - event with version {first_event.stream_position} already exists in database')
-
         new_events = list()
         for event in events:
             new_event = NewEvent(
@@ -81,7 +82,7 @@ class KurrentDBEventStore(EventStore):
                 metadata=event.metadata
             )
             new_events.append(new_event)
-
+        current_version = await self.get_stream_version(stream_name=stream_name)
         await self.client.append_events(stream_name=stream_name, current_version=current_version, events=new_events)
 
     async def close(self) -> None:
@@ -115,7 +116,8 @@ class KurrentDBEventStore(EventStore):
         )
         kdb_subscription = cast(AsyncCatchupSubscription, kdb_subscription)
 
-        subscription = KurrentDBSubscription(name=subscription_name, parameters=subscription_parameters, kdb_subscription=kdb_subscription)
+        subscription = KurrentDBSubscription(name=subscription_name, kdb_subscription=kdb_subscription)
+        await subscription.start()
         self._subscriptions.append(subscription)
         return subscription
 
@@ -134,13 +136,19 @@ class KurrentDBEventStore(EventStore):
         sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
         return sub
 
-    async def create_subscription_to_stream(self, subscription_name: str, regex: str, start_position: int) -> EventStoreSubscription:
+    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str, start_position: int) -> EventStoreSubscription:
         params = KurrentDBSubscriptionParameters(
             commit_position=start_position,
-            filter_include=[regex],
+            filter_include=[stream_name],
             filter_by_stream_name=True
         )
         return await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
+
+    async def get_stream_version(self, stream_name: str) -> int:
+        version = await self.client.get_current_version(stream_name=stream_name)
+        if version == StreamState.NO_STREAM:
+            return -1
+        return version
 
     async def get_stream(self, stream_name: str) -> Tuple[StreamEvent]:
         events = await self.client.get_stream(stream_name=stream_name)

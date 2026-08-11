@@ -106,7 +106,6 @@ class Mapper:
         metadata = json.dumps(asdict(domain_event.metadata)).encode()
 
         new_stream_event = NewStreamEvent(
-            stream_position=domain_event.metadata.aggregate_version,
             event_type=event_type,
             payload=payload,
             metadata=metadata
@@ -114,6 +113,7 @@ class Mapper:
         return new_stream_event
 
 
+# TODO - to many modules depend on this class, how to reduce this dependncy?
 mapper = Mapper()
 
 

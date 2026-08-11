@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build >= 0.12.1, <0.13.0"]
+build-backend = "uv_build"
 
 [project]
 name = "bestagon"
@@ -11,13 +11,42 @@ authors = [
 description = "Framework for event-sourcing with Python (DDD + ES + CQRS)"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "BSD-3-Clause"
+license-files = ["LICEN[CS]E*"]
+keywords = [
+    'DDD', 'Domain Driven Design', 'Event Sourcing', 'CQRS', 'Hexagonal Architecture', 'Microservices',
+    'Posts and Adapters', 'Event Driven Architecture', 'Aggregate'
+]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-license = "BSD-3-Clause"
-license-files = ["LICEN[CS]E*"]
+dependencies = [
+    "pydantic>=2.13.4",
+]
+
+[project.optional-dependencies]
+aiosqlite = [
+    "aiosqlite>=0.22.1",
+]
+fastapi = []
+kafka = []
+kurrentdb = [
+    "kurrentdbclient>=1.3.3",
+]
+neo4j = [
+    "neo4j>=6.2.0",
+]
+all = ["bestagon[aiosqlite,fastapi,kafka,kurrentdb,neo4j]"]
 
 [project.urls]
 Homepage = "https://github.com/rndmBot/bestagon"
+Documenttion = "https://bestagon.readthedocs.io/en/latest/"
 Issues = "https://github.com/rndmBot/bestagon/issues"
+
+[tool.uv.build-backend]
+module-root = ""

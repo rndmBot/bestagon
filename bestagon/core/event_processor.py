@@ -57,7 +57,7 @@ class EventProcessor(ABC):
             await handler(event)
 
     async def _consume_subscription(self) -> None:
-        while self.subscription.running:
+        while self.subscription.is_running():
             try:
                 stream_event = await self.subscription.next_event()
                 domain_event = mapper.to_domain_event(stream_event)
