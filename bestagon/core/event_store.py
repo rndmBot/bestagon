@@ -97,7 +97,7 @@ class EventStoreSubscription(ABC):
         return self._name
 
     @abstractmethod
-    async def is_running(self) -> bool:
+    def is_running(self) -> bool:
         """
         The subscription should provide a way to check whether it is running or not.
         The running subscription can return events from the event store.

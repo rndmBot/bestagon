@@ -132,10 +132,10 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
         self._connection = connection
 
         self._parameters = parameters
-        self._commit_position = parameters.commit_position
+        self._commit_position = parameters.commit_position or 0  # TODO - IMPORTANT - refine
 
         self._running = False
-        self._event_queue = Queue()
+        self._event_queue = Queue()  # TODO - there should be a limit for a number of events to avoid situations when queue contains large number of events
         self._subscription_task: Union[asyncio.Task, None] = None
 
     async def _start_subscription_task(self) -> None:
@@ -144,9 +144,12 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
         while self.is_running():
             filters = list()
             params = list()
-            if self._commit_position:
-                filters.append('commit_position > ?')
-                params.append(self._commit_position)
+
+            # TODO - IMPORTANT - refine
+            # Commit position
+            filters.append('commit_position >= ?')
+            params.append(self._commit_position)
+
             if self._parameters.event_types:
                 placeholders = ",".join(["?"] * len(self._parameters.event_types))
                 filter_string = f'event_type IN ({placeholders})'
@@ -181,7 +184,7 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
                         data = dict(zip(columns, row))
                         event = StreamEvent(**data)
                         self._event_queue.put_nowait(event)
-                        self._commit_position = event.commit_position
+                        self._commit_position = event.commit_position + 1  # TODO - IMPORTANT - refine
             await asyncio.sleep(self._parameters.fetch_interval)
 
     def is_running(self) -> bool:
@@ -333,7 +336,8 @@ class AIOSQLiteEventStore(EventStore):
     async def close(self) -> None:
         logger.info(f'Closing {self.__class__.__qualname__}')
         for subscription in self.get_subscriptions():
-            await subscription.stop()
+            if subscription.is_running():
+                await subscription.stop()
         if self._connection is not None:
             await self._connection.close()
         logger.info(f'{self.__class__.__qualname__} closed')

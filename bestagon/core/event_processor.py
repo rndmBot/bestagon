@@ -31,7 +31,7 @@ class EventProcessor(ABC):
     def running(self) -> bool:
         if self.subscription is None:
             return True
-        return self.subscription.running
+        return self.subscription.is_running()
 
     @property
     def subscription(self) -> Union[EventStoreSubscription, None]:
@@ -86,7 +86,7 @@ class EventProcessor(ABC):
     async def stop(self) -> None:
         if self.subscription is None:
             return
-        if self.subscription.running:
+        if self.subscription.is_running():
             await self.subscription.stop()
         if not self._subscription_task.done():
             self._subscription_task.cancel()
