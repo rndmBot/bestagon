@@ -128,6 +128,11 @@ class EventStoreSubscription(ABC):
 
 
 class EventStore(ABC):
+    """
+    Abstract interface for the event store.
+    
+    """
+
     @abstractmethod
     async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...]) -> None:
         """Reimplement to provide a logic to add new events in the event store."""
