@@ -154,7 +154,7 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_all(self, subscription_name: str, start_position: int) -> EventStoreSubscription:
+    async def create_subscription_to_all(self, subscription_name: str, start_position: int | None) -> EventStoreSubscription:
         """
         The event store should provide a functionality to create subscription to all events in the database.
         IMPORTANT - Only events recorded after 'start_position' position will be obtained.
@@ -162,7 +162,7 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_events(self, subscription_name: str, event_types: List[str], start_position: int) -> EventStoreSubscription:
+    async def create_subscription_to_events(self, subscription_name: str, event_types: List[str], start_position: int | None) -> EventStoreSubscription:
         """
         The event store should provide functionality to subscribe only to specific event types.
         IMPORTANT - Only events recorded after 'start_position' position will be obtained.
@@ -170,7 +170,7 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str, start_position: int) -> EventStoreSubscription:
+    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str, start_position: int | None) -> EventStoreSubscription:
         """
         The event store should provide functionality to subscribe to a specific stream of events.
         IMPORTANT - Only events recorded after 'start_position' position will be obtained.

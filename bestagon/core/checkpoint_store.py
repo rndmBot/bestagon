@@ -1,22 +1,14 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Tuple
+
+from pydantic import Field
+from pydantic.dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class Checkpoint:
     name: str
-    value: int
-
-    def __post_init__(self):
-        if not isinstance(self.name, str):
-            raise TypeError('Checkpoint name should be a string')
-        if not self.name:
-            raise ValueError('Checkpoint name should be a non empty string')
-        if not isinstance(self.value, int):
-            raise TypeError('Checkpoint value should be an integer')
-        if self.value < 0:
-            raise ValueError('Checkpoint value should be a positive integer')
+    value: int | None = Field(default=None, ge=0)
 
 
 class CheckpointStore(ABC):

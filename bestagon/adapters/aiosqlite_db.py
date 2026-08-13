@@ -19,21 +19,15 @@ class AIOSQLiteCheckpointStore(CheckpointStore):
     Ready to use Checkpoint Store implementation that uses `aiosqlite` as a storage.
     """
 
-    def __init__(self, database: str):
-        self._database = database
-        self._connection: aiosqlite.Connection = None
+    def __init__(self, connection: aiosqlite.Connection):
+        self._connection = connection
 
     @property
     def connection(self) -> aiosqlite.Connection:
         return self._connection
 
-    @property
-    def database(self) -> str:
-        return self._database
-
     async def close(self) -> None:
-        await self.connection.close()
-        logger.debug(f'Checkpoint store closed.')
+        pass
 
     async def delete_checkpoint(self, name: str) -> None:
         sql = '''
@@ -65,14 +59,12 @@ class AIOSQLiteCheckpointStore(CheckpointStore):
             data = dict(zip(columns, values))
             checkpoint = Checkpoint(**data)
         else:
-            checkpoint = Checkpoint(name=name, value=0)
+            checkpoint = Checkpoint(name=name, value=None)
 
         await cursor.close()
         return checkpoint
 
     async def initialize(self) -> None:
-        self._connection = await aiosqlite.connect(self.database)
-
         sql = '''
         CREATE TABLE IF NOT EXISTS _checkpoints(
             name TEXT PRIMARY KEY UNIQUE, 
@@ -119,11 +111,11 @@ class AIOSQLiteCheckpointStore(CheckpointStore):
 
 @dataclass(frozen=True)
 class AIOSQLiteSubscriptionParameters(SubscriptionParameters):
-    commit_position: Union[int, None] = None
+    commit_position: int | None = None
     event_types: Sequence[str] = ()
     stream_names: Sequence[str] = ()
     fetch_limit: int = 100
-    fetch_interval: int = 5
+    fetch_interval: int = 1
 
 
 class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
@@ -132,15 +124,22 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
         self._connection = connection
 
         self._parameters = parameters
-        self._commit_position = parameters.commit_position or 0  # TODO - IMPORTANT - refine
+        self._commit_position = parameters.commit_position
 
         self._running = False
         self._event_queue = Queue()  # TODO - there should be a limit for a number of events to avoid situations when queue contains large number of events
         self._subscription_task: Union[asyncio.Task, None] = None
 
+    def _get_next_commit_position(self) -> int:
+        if self._commit_position is None:
+            return 0
+        return self._commit_position + 1
+
     async def _start_subscription_task(self) -> None:
         # TODO - exception handling
         # TODO - logs
+        cursor = await self._connection.cursor()
+
         while self.is_running():
             filters = list()
             params = list()
@@ -148,7 +147,7 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
             # TODO - IMPORTANT - refine
             # Commit position
             filters.append('commit_position >= ?')
-            params.append(self._commit_position)
+            params.append(self._get_next_commit_position())
 
             if self._parameters.event_types:
                 placeholders = ",".join(["?"] * len(self._parameters.event_types))
@@ -175,17 +174,18 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
             '''
             params.append(self._parameters.fetch_limit)
 
-            async with self._connection.cursor() as cursor:
-                await cursor.execute(sql, parameters=params)
-                rows = await cursor.fetchall()
-                if rows:
-                    columns = [d[0] for d in cursor.description]
-                    for row in rows:
-                        data = dict(zip(columns, row))
-                        event = StreamEvent(**data)
-                        self._event_queue.put_nowait(event)
-                        self._commit_position = event.commit_position + 1  # TODO - IMPORTANT - refine
+            await cursor.execute(sql, parameters=params)
+            rows = await cursor.fetchall()
+            if rows:
+                columns = [d[0] for d in cursor.description]
+                for row in rows:
+                    data = dict(zip(columns, row))
+                    event = StreamEvent(**data)
+                    self._event_queue.put_nowait(event)
+                    self._commit_position = event.commit_position + 1  # TODO - IMPORTANT - refine
             await asyncio.sleep(self._parameters.fetch_interval)
+
+        await cursor.close()
 
     def is_running(self) -> bool:
         return self._running
@@ -230,10 +230,9 @@ class AIOSQLiteEventStore(EventStore):
         payload: bytes
         metadata: bytes
 
-    def __init__(self, database: str):
+    def __init__(self, connection: aiosqlite.Connection):
         super().__init__()
-        self._database = database
-        self._connection: aiosqlite.Connection = None
+        self._connection= connection
         self._subscriptions: List[AIOSQLiteEventStoreSubscription] = list()
 
     async def _get_last_commit_position(self) -> int | None:
@@ -325,11 +324,6 @@ class AIOSQLiteEventStore(EventStore):
 
     async def connect(self) -> None:
         logger.info(f'Connecting to {self.__class__.__qualname__}')
-        if self._connection is not None:
-            logger.info(f'Already connected to {self.__class__.__qualname__}')
-            return
-
-        self._connection = await aiosqlite.connect(self._database)
         await self._initialize_database()
         logger.info(f'Connected to {self.__class__.__qualname__}')
 
@@ -338,8 +332,6 @@ class AIOSQLiteEventStore(EventStore):
         for subscription in self.get_subscriptions():
             if subscription.is_running():
                 await subscription.stop()
-        if self._connection is not None:
-            await self._connection.close()
         logger.info(f'{self.__class__.__qualname__} closed')
 
     async def create_subscription(self, subscription_name: str, subscription_parameters: 'AIOSQLiteSubscriptionParameters') -> 'AIOSQLiteEventStoreSubscription':
@@ -447,10 +439,9 @@ class AIOSQLiteProjection(Projection):
         If your projection involves multiple tables, them you also need to reimplement `drop` method to drop data from multiple tables.
     """
 
-    def __init__(self, database: str, checkpoint_store: CheckpointStore):
+    def __init__(self, connection: aiosqlite.Connection, checkpoint_store: CheckpointStore):
         super().__init__(checkpoint_store=checkpoint_store)
-        self._database = database
-        self._connection: aiosqlite.Connection = None
+        self._connection = connection
 
     @property
     def connection(self) -> aiosqlite.Connection:
@@ -471,9 +462,5 @@ class AIOSQLiteProjection(Projection):
     def get_database_name(self) -> str:
         raise NotImplementedError
 
-    async def initialize_connection(self) -> None:
-        self._connection = await aiosqlite.connect(self._database)
-
     async def stop(self) -> None:
         await super().stop()
-        await self.connection.close()
