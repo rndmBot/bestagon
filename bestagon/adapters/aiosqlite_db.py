@@ -170,7 +170,8 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
                 SELECT *
                 FROM events
                 {where_filter}
-                LIMIT ? 
+                ORDER BY commit_position ASC
+                LIMIT ?
             '''
             params.append(self._parameters.fetch_limit)
 
