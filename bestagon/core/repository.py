@@ -23,7 +23,7 @@ class EventSourcedRepository:
     def _create_stream_name(aggregate_type: str, aggregate_id: str) -> str:
         return f'{aggregate_type}-{aggregate_id}'
 
-    def _validate_events(self, stream_version: int, events: Tuple[DomainEvent, ...]) -> None:
+    def _validate_events(self, stream_version: int | None, events: Tuple[DomainEvent, ...]) -> None:
         # Events cannot be empty list
         if not events:
             raise ValueError(
@@ -48,26 +48,28 @@ class EventSourcedRepository:
 
         first_event = events[0]
 
-        # If stream exists then the first event's aggregate_version should be exactly one more than the current stream version
-        if stream_version >= 0:
+        # If Stream version is None, the the stream not exists, in such case first event should have aggregate version = 0
+        if stream_version is None:
+            if first_event.metadata.aggregate_version != 0:
+                raise AggregateVersionError(
+                    f'Events validation failed - aggregate version of the first event for non existing stream should be 0, '
+                    f'got - {first_event.metadata.aggregate_version}'
+                )
+        else:
+            # Aggregate version cannot be less or equal to stream version, it means that there already event recorded in this position
             if first_event.metadata.aggregate_version <= stream_version:
                 raise AggregateVersionError(
                     f'Events validation failed - the first event\'s aggregate version is less or equal to the current stream version. '
                     f'This means that there is already event recorded in the stream in that position, and new events possibly contain duplicates.'
                 )
 
+            # If stream exists then the first event's aggregate_version should be exactly one more than the current stream version
             if first_event.metadata.aggregate_version - stream_version != 1:
                 raise AggregateVersionError(
                     f'Events validation failed - the first event\'s aggregate version should be exactly one more than the current stream version: '
                     f'current stream version - {stream_version}, first event aggregate version - {first_event.metadata.aggregate_version}'
                 )
-        # If stream version is negative, then the stream does not exists, in such case the first event should have aggregate version 0
-        else:
-            if first_event.metadata.aggregate_version != 0:
-                raise AggregateVersionError(
-                    f'Events validation failed - aggregate version of the first event for non existing stream should be 0, '
-                    f'got - {first_event.metadata.aggregate_version}'
-                )
+
 
     async def contains(self, aggregate_type: str, aggregate_id: str) -> bool:
         stream_id = self._create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from abc import abstractmethod
-from asyncio import Queue
+from asyncio import Queue, Lock
 from dataclasses import dataclass
 from typing import Tuple, List, Union, Sequence
 
@@ -22,10 +22,6 @@ class AIOSQLiteCheckpointStore(CheckpointStore):
     def __init__(self, connection: aiosqlite.Connection):
         self._connection = connection
 
-    @property
-    def connection(self) -> aiosqlite.Connection:
-        return self._connection
-
     async def close(self) -> None:
         pass
 
@@ -36,10 +32,14 @@ class AIOSQLiteCheckpointStore(CheckpointStore):
         '''
 
         props = {'name': name}
-        cursor = await self.connection.cursor()
-        await cursor.execute(sql, props)
-        await cursor.close()
-        await self.connection.commit()
+        async with self._connection.cursor() as cursor:
+            try:
+                await cursor.execute(sql, props)
+                await self._connection.commit()
+            except Exception as e:
+                await self._connection.rollback()
+                logger.exception(e)
+                raise e
         logger.debug(f'Checkpoint {name} deleted')
 
     async def get_checkpoint(self, name: str) -> Checkpoint:
@@ -50,18 +50,17 @@ class AIOSQLiteCheckpointStore(CheckpointStore):
         '''
 
         props = {'name': name}
-        cursor = await self.connection.cursor()
-        await cursor.execute(sql, props)
-        values = await cursor.fetchone()
+        async with self._connection.cursor() as cursor:
+            await cursor.execute(sql, props)
+            values = await cursor.fetchone()
 
-        if values:
-            columns = [datum[0] for datum in cursor.description]
-            data = dict(zip(columns, values))
-            checkpoint = Checkpoint(**data)
-        else:
-            checkpoint = Checkpoint(name=name, value=None)
+            if values:
+                columns = [datum[0] for datum in cursor.description]
+                data = dict(zip(columns, values))
+                checkpoint = Checkpoint(**data)
+            else:
+                checkpoint = Checkpoint(name=name, value=None)
 
-        await cursor.close()
         return checkpoint
 
     async def initialize(self) -> None:
@@ -71,27 +70,31 @@ class AIOSQLiteCheckpointStore(CheckpointStore):
             value INT
         )
         '''
-        cursor = await self.connection.cursor()
-        await cursor.execute(sql)
-        await cursor.close()
-        await self.connection.commit()
+        async with self._connection.cursor() as cursor:
+            try:
+                await cursor.execute(sql)
+                await cursor.close()
+                await self._connection.commit()
+            except Exception as e:
+                await self._connection.rollback()
+                raise e
         logger.debug(f'{self.__class__.__qualname__} initialized')
 
     async def list_checkpoints(self) -> Tuple[Checkpoint, ...]:
         sql = '''
         SELECT * FROM _checkpoints
         '''
-        cursor = await self.connection.cursor()
-        await cursor.execute(sql)
-        rows = await cursor.fetchall()
+        async with self._connection.cursor() as cursor:
+            await cursor.execute(sql)
+            rows = await cursor.fetchall()
 
-        checkpoints = list()
-        if rows:
-            columns = [datum[0] for datum in cursor.description]
-            for row in rows:
-                row_dict = dict(zip(columns, row))
-                checkpoint = Checkpoint(**row_dict)
-                checkpoints.append(checkpoint)
+            checkpoints = list()
+            if rows:
+                columns = [datum[0] for datum in cursor.description]
+                for row in rows:
+                    row_dict = dict(zip(columns, row))
+                    checkpoint = Checkpoint(**row_dict)
+                    checkpoints.append(checkpoint)
         return tuple(checkpoints)
 
     async def set_checkpoint(self, checkpoint: Checkpoint) -> None:
@@ -102,20 +105,33 @@ class AIOSQLiteCheckpointStore(CheckpointStore):
             DO UPDATE SET value = :value
         '''
         params = {'name': checkpoint.name, 'value': checkpoint.value}
-        cursor = await self.connection.cursor()
-        await cursor.execute(sql, params)
-        await cursor.close()
-        await self.connection.commit()
+        async with self._connection.cursor() as cursor:
+            try:
+                await cursor.execute(sql, params)
+                await self._connection.commit()
+            except Exception as e:
+                await self._connection.rollback()
+                raise e
         logger.debug(f'New checkpoint set {checkpoint.name}: {checkpoint.value}')
 
 
 @dataclass(frozen=True)
 class AIOSQLiteSubscriptionParameters(SubscriptionParameters):
-    commit_position: int | None = None
+    """
+    Subscription parameters for AIOSQLite subscription.
+
+    :param last_commit_position: the commit position of the last consumed event, the subscription will only return events
+    after that position
+    :param event_types: list of event types to return, the subscription will skip all other events.
+    :param stream_names: list of stream names to subscribe to, the subscription will return only events from these streams.
+    :param poll_limit: how many events will be polled at once
+    :param poll_interval: interval between polls in seconds
+    """
+    last_commit_position: int | None = None
     event_types: Sequence[str] = ()
     stream_names: Sequence[str] = ()
-    fetch_limit: int = 100
-    fetch_interval: int = 1
+    poll_limit: int = 100
+    poll_interval: int = 1
 
 
 class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
@@ -124,72 +140,72 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
         self._connection = connection
 
         self._parameters = parameters
-        self._commit_position = parameters.commit_position
+        self._last_commit_position = parameters.last_commit_position
 
-        self._running = False
-        self._event_queue = Queue()  # TODO - there should be a limit for a number of events to avoid situations when queue contains large number of events
+        self._consume_events = True
+        self._event_queue = Queue(maxsize=1000)
         self._subscription_task: Union[asyncio.Task, None] = None
 
     def _get_next_commit_position(self) -> int:
-        if self._commit_position is None:
+        if self._last_commit_position is None:
             return 0
-        return self._commit_position + 1
+        return self._last_commit_position + 1
 
     async def _start_subscription_task(self) -> None:
-        # TODO - exception handling
-        # TODO - logs
         cursor = await self._connection.cursor()
+        try:
+            while self._consume_events:
+                filters = list()
+                params = list()
 
-        while self.is_running():
-            filters = list()
-            params = list()
+                # Commit position
+                filters.append('commit_position >= ?')
+                params.append(self._get_next_commit_position())
 
-            # TODO - IMPORTANT - refine
-            # Commit position
-            filters.append('commit_position >= ?')
-            params.append(self._get_next_commit_position())
+                if self._parameters.event_types:
+                    placeholders = ",".join(["?"] * len(self._parameters.event_types))
+                    filter_string = f'event_type IN ({placeholders})'
+                    filters.append(filter_string)
+                    params.extend(self._parameters.event_types)
+                if self._parameters.stream_names:
+                    placeholders = ",".join(["?"] * len(self._parameters.stream_names))
+                    filter_string = f'stream_name IN ({placeholders})'
+                    filters.append(filter_string)
+                    params.extend(self._parameters.stream_names)
 
-            if self._parameters.event_types:
-                placeholders = ",".join(["?"] * len(self._parameters.event_types))
-                filter_string = f'event_type IN ({placeholders})'
-                filters.append(filter_string)
-                params.extend(self._parameters.event_types)
-            if self._parameters.stream_names:
-                placeholders = ",".join(["?"] * len(self._parameters.stream_names))
-                filter_string = f'stream_name IN ({placeholders})'
-                filters.append(filter_string)
-                params.extend(self._parameters.stream_names)
-
-            if filters:
                 where_filter = ' AND '.join(filters)
                 where_filter = f'WHERE {where_filter}'
-            else:
-                where_filter = ''
 
-            sql = f'''
-                SELECT *
-                FROM events
-                {where_filter}
-                ORDER BY commit_position ASC
-                LIMIT ?
-            '''
-            params.append(self._parameters.fetch_limit)
+                sql = f'''
+                    SELECT *
+                    FROM events
+                    {where_filter}
+                    ORDER BY commit_position ASC
+                    LIMIT ?
+                '''
+                params.append(self._parameters.poll_limit)
 
-            await cursor.execute(sql, parameters=params)
-            rows = await cursor.fetchall()
-            if rows:
-                columns = [d[0] for d in cursor.description]
-                for row in rows:
-                    data = dict(zip(columns, row))
-                    event = StreamEvent(**data)
-                    self._event_queue.put_nowait(event)
-                    self._commit_position = event.commit_position + 1  # TODO - IMPORTANT - refine
-            await asyncio.sleep(self._parameters.fetch_interval)
-
+                await cursor.execute(sql, parameters=params)
+                rows = await cursor.fetchall()
+                if rows:
+                    columns = [d[0] for d in cursor.description]
+                    for row in rows:
+                        data = dict(zip(columns, row))
+                        event = StreamEvent(**data)
+                        await self._event_queue.put(event)
+                        self._last_commit_position = event.commit_position
+                await asyncio.sleep(self._parameters.poll_interval)
+        except Exception as e:
+            logger.exception(f'Subscription {self.id} failed: {e}')
+            await cursor.close()
+            raise e
         await cursor.close()
 
     def is_running(self) -> bool:
-        return self._running
+        if self._subscription_task is None:
+            return False
+        else:
+            return not self._subscription_task.done()
 
     async def next_event(self) -> StreamEvent:
         if not self.is_running():
@@ -200,28 +216,23 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
         return next_event
 
     async def start(self) -> None:
-        # TODO - logs
         if self.is_running():
             raise SubscriptionError(f'Subscription {self.name} already started')
-        self._running = True
-
-        if self._subscription_task is None:
-            self._subscription_task = asyncio.create_task(self._start_subscription_task())
+        self._consume_events = True
+        self._subscription_task = asyncio.create_task(self._start_subscription_task())
+        logger.debug(f'Subscription "{self.name}" with ID {self.id} started.')
 
     async def stop(self) -> None:
-        # TODO - logs
         if not self.is_running():
             raise SubscriptionError(f'Subscription {self.name} is already stopped')
-
-        self._running = False
+        self._consume_events = False
         if self._subscription_task is not None:
-            self._subscription_task.cancel()
+            await self._subscription_task
             self._subscription_task = None
+        logger.info(f'Subscription {self.name} with ID {self.id} stopped')
 
 
 class AIOSQLiteEventStore(EventStore):
-    # TODO - log everything
-
     @dataclass(frozen=True)
     class NewEvent:
         commit_position: int
@@ -233,15 +244,31 @@ class AIOSQLiteEventStore(EventStore):
 
     def __init__(self, connection: aiosqlite.Connection):
         super().__init__()
-        self._connection= connection
+        self._connection = connection
         self._subscriptions: List[AIOSQLiteEventStoreSubscription] = list()
+        self._write_lock = Lock()
 
-    async def _get_last_commit_position(self) -> int | None:
+    async def _get_next_commit_position(self) -> int:
         sql = '''SELECT MAX(commit_position) AS last_commit_position FROM events'''
         async with self._connection.cursor() as cursor:
             await cursor.execute(sql)
             row = await cursor.fetchone()
-            return row[0]
+
+        commit_position = row[0]
+        if commit_position is None:
+            commit_position = 0
+        else:
+            commit_position = commit_position + 1
+
+        return commit_position
+
+    async def _get_next_stream_position(self, stream_name: str) -> int:
+        stream_version = await self.get_stream_version(stream_name)
+        if stream_version is None:
+            next_stream_position = 0
+        else:
+            next_stream_position = stream_version + 1
+        return next_stream_position
 
     async def _initialize_database(self) -> None:
         logger.info(f'Initializing {self.__class__.__qualname__}')
@@ -257,14 +284,37 @@ class AIOSQLiteEventStore(EventStore):
         )
         '''
         index_sql = 'CREATE INDEX IF NOT EXISTS events_event_type_index ON events (event_type)'
+        stream_name_index_sql = 'CREATE INDEX IF NOT EXISTS events_stream_name_index ON events (stream_name)'
+        stream_position_index_sql = 'CREATE INDEX IF NOT EXISTS events_stream_position_index ON events (stream_position)'
 
         async with self._connection.cursor() as cursor:
             await cursor.execute(create_sql)
             await cursor.execute(index_sql)
+            await cursor.execute(stream_name_index_sql)
+            await cursor.execute(stream_position_index_sql)
             await self._connection.commit()
         logger.info(f'{self.__class__.__qualname__} initialized')
 
-    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent]) -> None:
+    async def _prepare_new_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...]) -> List[NewEvent]:
+        new_events: List[AIOSQLiteEventStore.NewEvent] = list()
+        next_commit_position = await self._get_next_commit_position()
+        next_stream_position = await self._get_next_stream_position(stream_name=stream_name)
+
+        for event in events:
+            new_event = self.NewEvent(
+                commit_position=next_commit_position,
+                stream_name=stream_name,
+                stream_position=next_stream_position,
+                event_type=event.event_type,
+                payload=event.payload,
+                metadata=event.metadata
+            )
+            new_events.append(new_event)
+            next_commit_position += 1
+            next_stream_position += 1
+        return new_events
+
+    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...]) -> None:
         if not events:
             return
         if not all([isinstance(e, NewStreamEvent) for e in events]):
@@ -272,71 +322,35 @@ class AIOSQLiteEventStore(EventStore):
                             f'all events must be instances of NewStreamEvent class, '
                             f'one or more events are of invalid type, please check types of the passed events.')
 
-        logger.debug(f'Appending {len(events)} into {self.__class__.__qualname__}')
+        async with self._write_lock:
+            logger.debug(f'Appending {len(events)} events into "{stream_name}" stream of {self.__class__.__qualname__}')
+            new_events = await self._prepare_new_events(stream_name=stream_name, events=events)
+            sql = '''
+            INSERT INTO events (commit_position, stream_name, stream_position, event_type, payload, metadata)
+            VALUES (:commit_position, :stream_name, :stream_position, :event_type, :payload, :metadata)
+            '''
 
-
-        stream_version = await self.get_stream_version(stream_name)
-
-        new_events: List[AIOSQLiteEventStore.NewEvent] = list()
-
-        commit_position = await self._get_last_commit_position()
-        if commit_position is None:
-            commit_position = 0
-        else:
-            commit_position = commit_position + 1
-
-        stream_position = stream_version + 1
-        for event in events:
-            new_event = self.NewEvent(
-                commit_position=commit_position,
-                stream_name=stream_name,
-                stream_position=stream_position,
-                event_type=event.event_type,
-                payload=event.payload,
-                metadata=event.metadata
-            )
-            new_events.append(new_event)
-            commit_position += 1
-            stream_position += 1
-
-        sql = '''
-        INSERT INTO events (commit_position, stream_name, stream_position, event_type, payload, metadata)
-        VALUES (:commit_position, :stream_name, :stream_position, :event_type, :payload, :metadata)
-        '''
-
-        try:
-            async with self._connection.cursor() as cursor:
-                for new_event in new_events:
-                    params = {
-                        'commit_position': new_event.commit_position,
-                        'stream_name': new_event.stream_name,
-                        'stream_position': new_event.stream_position,
-                        'event_type': new_event.event_type,
-                        'payload': new_event.payload,
-                        'metadata': new_event.metadata
-                    }
-                    await cursor.execute(sql, parameters=params)
-            await self._connection.commit()
-            logger.debug(f'New events appended to {self.__class__.__qualname__}')
-        except Exception as e:
-            await self._connection.rollback()
-            logger.exception(f'An exception occured when appending new events: {e}')
-            raise e
-
-    async def connect(self) -> None:
-        logger.info(f'Connecting to {self.__class__.__qualname__}')
-        await self._initialize_database()
-        logger.info(f'Connected to {self.__class__.__qualname__}')
-
-    async def close(self) -> None:
-        logger.info(f'Closing {self.__class__.__qualname__}')
-        for subscription in self.get_subscriptions():
-            if subscription.is_running():
-                await subscription.stop()
-        logger.info(f'{self.__class__.__qualname__} closed')
+            try:
+                async with self._connection.cursor() as cursor:
+                    for new_event in new_events:
+                        params = {
+                            'commit_position': new_event.commit_position,
+                            'stream_name': new_event.stream_name,
+                            'stream_position': new_event.stream_position,
+                            'event_type': new_event.event_type,
+                            'payload': new_event.payload,
+                            'metadata': new_event.metadata
+                        }
+                        await cursor.execute(sql, parameters=params)
+                await self._connection.commit()
+                logger.debug(f'New events appended to "{stream_name}" stream of {self.__class__.__qualname__}')
+            except Exception as e:
+                await self._connection.rollback()
+                logger.exception(f'Failed to append new events into "{stream_name}" stream: {e}')
+                raise e
 
     async def create_subscription(self, subscription_name: str, subscription_parameters: 'AIOSQLiteSubscriptionParameters') -> 'AIOSQLiteEventStoreSubscription':
-        # TODO - logs
+        logger.debug(f'Creating subscription to {self.__class__.__qualname__} with parameters {subscription_parameters}')
         subscription = AIOSQLiteEventStoreSubscription(
             name=subscription_name,
             parameters=subscription_parameters,
@@ -346,15 +360,16 @@ class AIOSQLiteEventStore(EventStore):
         self._subscriptions.append(subscription)
         return subscription
 
-    async def create_subscription_to_all(self, subscription_name: str, start_position: int) -> 'AIOSQLiteEventStoreSubscription':
-        parameters = AIOSQLiteSubscriptionParameters(commit_position=start_position)
+    async def create_subscription_to_all(self, subscription_name: str,
+                                         last_commit_position: int | None) -> 'AIOSQLiteEventStoreSubscription':
+        parameters = AIOSQLiteSubscriptionParameters(last_commit_position=last_commit_position)
         subscription = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=parameters)
         return subscription
 
     async def create_subscription_to_events(self, subscription_name: str, event_types: List[str],
-                                            start_position: int) -> 'AIOSQLiteEventStoreSubscription':
+                                            last_commit_position: int | None) -> 'AIOSQLiteEventStoreSubscription':
         parameters = AIOSQLiteSubscriptionParameters(
-            commit_position=start_position,
+            last_commit_position=last_commit_position,
             event_types=event_types
         )
         subscription = await self.create_subscription(
@@ -363,19 +378,21 @@ class AIOSQLiteEventStore(EventStore):
         )
         return subscription
 
-    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str, start_position: int) -> 'AIOSQLiteEventStoreSubscription':
+    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str,
+                                            last_commit_position: int | None) -> 'AIOSQLiteEventStoreSubscription':
         parameters = AIOSQLiteSubscriptionParameters(
-            commit_position=start_position,
+            last_commit_position=last_commit_position,
             stream_names=[stream_name]
         )
         subscription = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=parameters)
         return subscription
 
-    async def get_stream(self, stream_name: str) -> Tuple[StreamEvent]:
+    async def get_stream(self, stream_name: str) -> Tuple[StreamEvent, ...]:
         sql = '''
         SELECT *
         FROM events
         WHERE stream_name = :stream_name
+        ORDER BY stream_position ASC
         '''
 
         async with self._connection.cursor() as cursor:
@@ -389,31 +406,34 @@ class AIOSQLiteEventStore(EventStore):
                 datum = dict(zip(columns, row))
                 event = StreamEvent(**datum)
                 events.append(event)
-
         return tuple(events)
 
-    async def get_stream_version(self, stream_name: str) -> int:
-        # TODO - logs
-
+    async def get_stream_version(self, stream_name: str) -> int | None:
         sql = '''
-        SELECT COALESCE(MAX(stream_position), -1) AS stream_version
+        SELECT MAX(stream_position) AS stream_version
         FROM events
         WHERE stream_name = :stream_name
         '''
-
         async with self._connection.cursor() as cursor:
             params = {'stream_name': stream_name}
             await cursor.execute(sql, parameters=params)
             result = await cursor.fetchone()
-
-        stream_version = result[0]
-        return stream_version
+        return result[0]
 
     def get_subscriptions(self) -> Tuple[AIOSQLiteEventStoreSubscription, ...]:
         return tuple(self._subscriptions)
 
+    async def initialize(self) -> None:
+        await self._initialize_database()
+
+    async def shutdown(self) -> None:
+        logger.info(f'Shuting down {self.__class__.__qualname__}')
+        for subscription in self.get_subscriptions():
+            if subscription.is_running():
+                await subscription.stop()
+        logger.info(f'{self.__class__.__qualname__} shut down')
+
     async def stream_exists(self, stream_name: str) -> bool:
-        # TODO - logs
         sql = '''
         SELECT EXISTS(
             SELECT 1 FROM events WHERE stream_name = :stream_name
@@ -424,7 +444,6 @@ class AIOSQLiteEventStore(EventStore):
             params = {'stream_name': stream_name}
             await cursor.execute(sql, parameters=params)
             row = await cursor.fetchone()
-
         return bool(row[0])
 
 
@@ -453,11 +472,17 @@ class AIOSQLiteProjection(Projection):
         return self.get_database_name()
 
     async def drop(self) -> None:
-        sql = f'DELETE FROM {self.database_name}'
         cursor = await self.connection.cursor()
-        await cursor.execute(sql)
-        await cursor.close()
-        await self.connection.commit()
+        sql = f'DELETE FROM {self.database_name}'
+        try:
+            await cursor.execute(sql)
+            await cursor.close()
+            await self.connection.commit()
+        except Exception as e:
+            await cursor.close()
+            await self.connection.rollback()
+            logger.exception(e)
+            raise e
 
     @abstractmethod
     def get_database_name(self) -> str:

@@ -13,6 +13,8 @@ of the specified stream or -1 if stream not exists.
 - New adapter - `AIOSQLiteEventStore` event store implementation using `aiosqlite` module.
 - New abstract method for `EventStoreSubscription` class - `start`.
 - Removed property `running` of `EventStoreSubscription`.
+- `EventStore` `connect` method renamed to `initialize`
+- `EventStore` `close` method renamed to `shutdown`
 
 ### Changed
 - Documentation improvements

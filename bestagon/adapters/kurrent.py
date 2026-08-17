@@ -86,7 +86,7 @@ class KurrentDBEventStore(EventStore):
         current_version = await self.get_stream_version(stream_name=stream_name)
         await self.client.append_events(stream_name=stream_name, current_version=current_version, events=new_events)
 
-    async def close(self) -> None:
+    async def shudtown(self) -> None:
         if self.get_subscriptions():
             await asyncio.gather(*[sub.stop() for sub in self.get_subscriptions()])
             logger.info('All subscriptions stopped')
@@ -94,7 +94,7 @@ class KurrentDBEventStore(EventStore):
         await self.client.close()
         logger.info('Event store closed')
 
-    async def connect(self) -> None:
+    async def initialize(self) -> None:
         await self.client.connect()
         logger.info('Event store connected')
 
@@ -122,33 +122,35 @@ class KurrentDBEventStore(EventStore):
         self._subscriptions.append(subscription)
         return subscription
 
-    async def create_subscription_to_all(self, subscription_name: str, start_position: int) -> 'EventStoreSubscription':
-        params = KurrentDBSubscriptionParameters(commit_position=start_position)
+    async def create_subscription_to_all(self, subscription_name: str,
+                                         last_commit_position: int) -> 'EventStoreSubscription':
+        params = KurrentDBSubscriptionParameters(commit_position=last_commit_position)
         sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
         return sub
 
     async def create_subscription_to_events(self, subscription_name: str, event_types: List[str],
-                                            start_position: int) -> 'EventStoreSubscription':
+                                            last_commit_position: int) -> 'EventStoreSubscription':
         params = KurrentDBSubscriptionParameters(
-            commit_position=start_position,
+            commit_position=last_commit_position,
             filter_include=event_types,
             filter_by_stream_name=False
         )
         sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
         return sub
 
-    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str, start_position: int) -> EventStoreSubscription:
+    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str,
+                                            last_commit_position: int) -> EventStoreSubscription:
         params = KurrentDBSubscriptionParameters(
-            commit_position=start_position,
+            commit_position=last_commit_position,
             filter_include=[stream_name],
             filter_by_stream_name=True
         )
         return await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
 
-    async def get_stream_version(self, stream_name: str) -> int:
+    async def get_stream_version(self, stream_name: str) -> int | None:
         version = await self.client.get_current_version(stream_name=stream_name)
         if version == StreamState.NO_STREAM:
-            return -1
+            return None
         return version
 
     async def get_stream(self, stream_name: str) -> Tuple[StreamEvent]:

@@ -119,7 +119,7 @@ class EventProcessor(ABC):
         checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
         subscription = await event_store.create_subscription_to_events(subscription_name=subscription_name,
                                                                        event_types=event_types,
-                                                                       start_position=checkpoint.value)
+                                                                       last_commit_position=checkpoint.value)
 
         self._subscription = subscription
         self._subscription_task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')

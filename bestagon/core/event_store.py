@@ -59,6 +59,7 @@ class SubscriptionParameters:
 class EventStoreSubscription(ABC):
     """
     The base class for event store subscription.
+    You usually do not instantiate subscription by yourself, it is responsibility of specific event store.
     The subscription is identified by it's ID, which is a UUID4, but you can also provide an optional name during initialization.
 
     One of the most important methods for subscription - next_event. When awaited, it should return the next event to process.
@@ -130,20 +131,11 @@ class EventStoreSubscription(ABC):
 class EventStore(ABC):
     """
     Abstract interface for the event store.
-    
     """
 
     @abstractmethod
     async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...]) -> None:
         """Reimplement to provide a logic to add new events in the event store."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def close(self) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def connect(self) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -154,26 +146,26 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_all(self, subscription_name: str, start_position: int | None) -> EventStoreSubscription:
+    async def create_subscription_to_all(self, subscription_name: str, last_commit_position: int | None) -> EventStoreSubscription:
         """
         The event store should provide a functionality to create subscription to all events in the database.
-        IMPORTANT - Only events recorded after 'start_position' position will be obtained.
+        IMPORTANT - Only events recorded after 'last_commit_position' position will be obtained.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_events(self, subscription_name: str, event_types: List[str], start_position: int | None) -> EventStoreSubscription:
+    async def create_subscription_to_events(self, subscription_name: str, event_types: List[str], last_commit_position: int | None) -> EventStoreSubscription:
         """
         The event store should provide functionality to subscribe only to specific event types.
-        IMPORTANT - Only events recorded after 'start_position' position will be obtained.
+        IMPORTANT - Only events recorded after 'last_commit_position' position will be obtained.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str, start_position: int | None) -> EventStoreSubscription:
+    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str, last_commit_position: int | None) -> EventStoreSubscription:
         """
         The event store should provide functionality to subscribe to a specific stream of events.
-        IMPORTANT - Only events recorded after 'start_position' position will be obtained.
+        IMPORTANT - Only events recorded after 'last_commit_position' position will be obtained.
         """
         raise NotImplementedError
 
@@ -185,14 +177,34 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_stream_version(self, stream_name: str) -> int:
+    async def get_stream_version(self, stream_name: str) -> int | None:
         """
-        Should return the current version of the stream or -1 if stream not exists.
+        Should return the current version of the stream or None if stream not exists.
         """
         raise NotImplementedError
 
     @abstractmethod
     def get_subscriptions(self) -> Tuple[EventStoreSubscription, ...]:
+        """
+        The method should return a tuple of subscriptions, that have been created by the event store.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def initialize(self) -> None:
+        """
+        Event store can require additional actions after instantiation, for example to create a table for
+        events if you use SQL database as an underlying technology. In such cases this method can be reimplemented
+        to provide necvessary setup.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def shudtown(self) -> None:
+        """
+        This method can be reimplemented in case when you finishing to work with event store to release resources and
+        finish the work gracefuly.
+        """
         raise NotImplementedError
 
     @abstractmethod
