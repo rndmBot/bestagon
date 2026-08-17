@@ -149,5 +149,5 @@ class EventSourcedSystem(ABC):
         for proj in self.projections:
             await proj.stop()
 
-        await self.event_store.shudtown()
+        await self.event_store.shutdown()
         await self.checkpoint_store.close()

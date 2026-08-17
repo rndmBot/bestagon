@@ -84,9 +84,11 @@ class KurrentDBEventStore(EventStore):
             )
             new_events.append(new_event)
         current_version = await self.get_stream_version(stream_name=stream_name)
+        if current_version is None:
+            current_version = StreamState.NO_STREAM
         await self.client.append_events(stream_name=stream_name, current_version=current_version, events=new_events)
 
-    async def shudtown(self) -> None:
+    async def shutdown(self) -> None:
         if self.get_subscriptions():
             await asyncio.gather(*[sub.stop() for sub in self.get_subscriptions()])
             logger.info('All subscriptions stopped')

@@ -200,7 +200,7 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def shudtown(self) -> None:
+    async def shutdown(self) -> None:
         """
         This method can be reimplemented in case when you finishing to work with event store to release resources and
         finish the work gracefuly.
