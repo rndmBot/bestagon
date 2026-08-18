@@ -15,7 +15,7 @@ license = "BSD-3-Clause"
 license-files = ["LICEN[CS]E*"]
 keywords = [
     'DDD', 'Domain Driven Design', 'Event Sourcing', 'CQRS', 'Hexagonal Architecture', 'Microservices',
-    'Posts and Adapters', 'Event Driven Architecture', 'Aggregate'
+    'Ports and Adapters', 'Event Driven Architecture', 'Aggregate'
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -45,7 +45,7 @@ all = ["bestagon[aiosqlite,fastapi,kafka,kurrentdb,neo4j]"]
 
 [project.urls]
 Homepage = "https://github.com/rndmBot/bestagon"
-Documenttion = "https://bestagon.readthedocs.io/en/latest/"
+Documentation = "https://bestagon.readthedocs.io/en/latest/"
 Issues = "https://github.com/rndmBot/bestagon/issues"
 
 [tool.uv.build-backend]
@@ -53,6 +53,7 @@ module-root = ""
 
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.22.1",
     "kurrentdbclient>=1.3.3",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",

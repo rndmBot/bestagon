@@ -131,7 +131,7 @@ class AIOSQLiteSubscriptionParameters(SubscriptionParameters):
     event_types: Sequence[str] = ()
     stream_names: Sequence[str] = ()
     poll_limit: int = 100
-    poll_interval: int = 1
+    poll_interval: int |float = 0.5
 
 
 class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
@@ -428,9 +428,7 @@ class AIOSQLiteEventStore(EventStore):
 
     async def shutdown(self) -> None:
         logger.info(f'Shuting down {self.__class__.__qualname__}')
-        for subscription in self.get_subscriptions():
-            if subscription.is_running():
-                await subscription.stop()
+        await asyncio.gather(*[sub.stop() for sub in self._subscriptions if sub.is_running()])
         logger.info(f'{self.__class__.__qualname__} shut down')
 
     async def stream_exists(self, stream_name: str) -> bool:

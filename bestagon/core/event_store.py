@@ -15,7 +15,7 @@ class SubscriptionError(BestagonError):
 class NewStreamEvent(BaseModel):
     """
     New event to store in an event store.
-    This class have to be used when you save new events in the event store.
+    This class have to be used when you want to append new events in the event store.
     """
     model_config = ConfigDict(strict=True)
 
@@ -49,9 +49,8 @@ class StreamEvent:
 @dataclass(frozen=True)
 class SubscriptionParameters:
     """
-    Each storage technology provides it's own set of parameters for subscription, therefore, this class should be
-    reimplemented to provide subscription parameters for the specific technology,
-    for example Kurrent database or AIOSQLite database
+    Each storage technology provides it's own set of parameters for subscription and this class should be
+    reimplemented to provide subscription parameters for the specific technology,for example Kurrent event store or AIOSQLite database.
     """
     pass
 
@@ -59,17 +58,15 @@ class SubscriptionParameters:
 class EventStoreSubscription(ABC):
     """
     The base class for event store subscription.
-    You usually do not instantiate subscription by yourself, it is responsibility of specific event store.
-    The subscription is identified by it's ID, which is a UUID4, but you can also provide an optional name during initialization.
+    You usually do not instantiate subscription by yourself, it is responsibility of event store.
+    Each subscription contains unique identifier in the form of UUID4. In addition to identifier an optional name can be provided.
 
-    One of the most important methods for subscription - next_event. When awaited, it should return the next event to process.
-
-    The subscription can be used in several ways:
-    1. Directly calling next_event t receive the next event.
+    Conceptually each subsctription is an AsyncIterator that can be awaited to receive new events.
+    Examples of subscription usage:
+    1. Directly calling next_event to receive the next event.
     2. Using async for syntax, for example:
         async for event in subscription:
             process_event(event)
-
     """
     def __init__(self, name: str | None = None):
         self._name = name
@@ -91,19 +88,28 @@ class EventStoreSubscription(ABC):
 
     @property
     def id(self) -> str:
+        """Each subscription is assigned a unique ID number"""
         return self._id
 
     @property
     def name(self) -> str | None:
         return self._name
 
+    @name.setter
+    def name(self, name: str) -> None:
+        self.set_name(name)
+
     @abstractmethod
     def is_running(self) -> bool:
         """
         The subscription should provide a way to check whether it is running or not.
         The running subscription can return events from the event store.
+        Stopped subscription should raise an error on attempt to get next event.
         """
         raise NotImplementedError
+
+    def set_name(self, name: str) -> None:
+        self._name = name
 
     @abstractmethod
     async def start(self) -> None:

@@ -55,6 +55,7 @@ neo4j = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "aiosqlite" },
     { name = "kurrentdbclient" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -72,6 +73,7 @@ provides-extras = ["aiosqlite", "fastapi", "kafka", "kurrentdb", "neo4j", "all"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "kurrentdbclient", specifier = ">=1.3.3" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },

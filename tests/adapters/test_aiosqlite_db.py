@@ -48,14 +48,18 @@ class TestAIOSQLiteEventStoreSubscription:
     @pytest.mark.asyncio
     async def test_is_running_false_before_start(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(),
+            connection=connection
         )
         assert subscription.is_running() is False
 
     @pytest.mark.asyncio
     async def test_start_marks_subscription_as_running(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL),
+            connection=connection
         )
         await subscription.start()
         try:
@@ -66,7 +70,9 @@ class TestAIOSQLiteEventStoreSubscription:
     @pytest.mark.asyncio
     async def test_start_raises_when_already_running(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL),
+            connection=connection
         )
         await subscription.start()
         try:
@@ -78,7 +84,9 @@ class TestAIOSQLiteEventStoreSubscription:
     @pytest.mark.asyncio
     async def test_stop_marks_subscription_as_not_running(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL),
+            connection=connection
         )
         await subscription.start()
         await subscription.stop()
@@ -87,7 +95,9 @@ class TestAIOSQLiteEventStoreSubscription:
     @pytest.mark.asyncio
     async def test_stop_raises_when_not_running(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(),
+            connection=connection
         )
         with pytest.raises(SubscriptionError):
             await subscription.stop()
@@ -95,7 +105,9 @@ class TestAIOSQLiteEventStoreSubscription:
     @pytest.mark.asyncio
     async def test_stop_raises_when_already_stopped(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL),
+            connection=connection
         )
         await subscription.start()
         await subscription.stop()
@@ -105,7 +117,9 @@ class TestAIOSQLiteEventStoreSubscription:
     @pytest.mark.asyncio
     async def test_next_event_raises_stop_async_iteration_when_not_running(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(),
+            connection=connection
         )
         with pytest.raises(StopAsyncIteration):
             await subscription.next_event()
@@ -115,7 +129,9 @@ class TestAIOSQLiteEventStoreSubscription:
         await event_store.append_events('stream-a', (new_event(event_type='A1'), new_event(event_type='A2')))
 
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL),
+            connection=connection
         )
         await subscription.start()
         try:
@@ -191,7 +207,9 @@ class TestAIOSQLiteEventStoreSubscription:
     @pytest.mark.asyncio
     async def test_picks_up_events_appended_after_start(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL),
+            connection=connection
         )
         await subscription.start()
         try:
@@ -204,9 +222,7 @@ class TestAIOSQLiteEventStoreSubscription:
 
     @pytest.mark.asyncio
     async def test_respects_poll_limit_across_multiple_polls(self, event_store, connection):
-        await event_store.append_events(
-            'stream-a', tuple(new_event(event_type=f'E{i}') for i in range(3))
-        )
+        await event_store.append_events('stream-a', tuple(new_event(event_type=f'E{i}') for i in range(3)))
 
         subscription = AIOSQLiteEventStoreSubscription(
             name='sub',
@@ -226,7 +242,9 @@ class TestAIOSQLiteEventStoreSubscription:
         await event_store.append_events('stream-a', (new_event(event_type='Iter1'), new_event(event_type='Iter2')))
 
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL),
+            connection=connection
         )
         await subscription.start()
         try:
@@ -243,7 +261,9 @@ class TestAIOSQLiteEventStoreSubscription:
     @pytest.mark.asyncio
     async def test_task_stops_and_raises_on_database_error(self, event_store, connection):
         subscription = AIOSQLiteEventStoreSubscription(
-            name='sub', parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL), connection=connection
+            name='sub',
+            parameters=AIOSQLiteSubscriptionParameters(poll_interval=POLL_INTERVAL),
+            connection=connection
         )
         await subscription.start()
         task = subscription._subscription_task
@@ -424,7 +444,9 @@ class TestAIOSQLiteEventStore:
         await event_store.append_events('stream-a', (new_event(event_type='Wanted'), new_event(event_type='Unwanted')))
 
         subscription = await event_store.create_subscription_to_events(
-            subscription_name='sub-events', event_types=['Wanted'], last_commit_position=None
+            subscription_name='sub-events',
+            event_types=['Wanted'],
+            last_commit_position=None
         )
 
         event = await asyncio.wait_for(subscription.next_event(), timeout=1)
