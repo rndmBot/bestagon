@@ -6,11 +6,10 @@ from typing import List, Union, Sequence, cast, Tuple
 import grpc
 from kurrentdbclient import StreamState, NewEvent, DEFAULT_EXCLUDE_FILTER, AsyncKurrentDBClient, AsyncCatchupSubscription
 from kurrentdbclient.common import DEFAULT_WINDOW_SIZE, DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER
-from kurrentdbclient.exceptions import NotFoundError
+from kurrentdbclient.exceptions import NotFoundError, WrongCurrentVersionError
 
 from bestagon.core.event_store import EventStore, SubscriptionParameters, EventStoreSubscription, StreamEvent, \
-    NewStreamEvent
-
+    NewStreamEvent, ExpectedVersionError, SubscriptionError
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,6 @@ class KurrentDBSubscription(EventStoreSubscription):
         return self._running
 
     async def next_event(self) -> StreamEvent:
-        # TODO - exception handling
         if not self._running:
             raise StopAsyncIteration
 
@@ -58,14 +56,16 @@ class KurrentDBSubscription(EventStoreSubscription):
         return stream_event
 
     async def start(self) -> None:
-        # TODO - logs
+        if self.is_running():
+            raise SubscriptionError(f'Subscription {self.name} already started')
         self._running = True
 
     async def stop(self) -> None:
-        # TODO - logs
-        if self._running:
-            self._running = False
-            await self._kdb_subscription.stop()
+        if not self.is_running():
+            raise SubscriptionError(f'Subscription {self.name} is already stopped')
+
+        self._running = False
+        await self._kdb_subscription.stop()
 
 
 class KurrentDBEventStore(EventStore):
@@ -74,7 +74,16 @@ class KurrentDBEventStore(EventStore):
         self._subscriptions: List[KurrentDBSubscription] = list()
         self.client = client
 
-    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent]) -> None:
+    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...], expected_version: int | None = None) -> None:
+        if not events:
+            return
+        if not all(isinstance(e, NewStreamEvent) for e in events):
+            raise TypeError(
+                f'Failed to append events into {self.__class__.__qualname__}, '
+                f'all events must be instances of NewStreamEvent class, '
+                f'one or more events are of invalid type, please check types of the passed events.'
+            )
+
         new_events = list()
         for event in events:
             new_event = NewEvent(
@@ -83,25 +92,21 @@ class KurrentDBEventStore(EventStore):
                 metadata=event.metadata
             )
             new_events.append(new_event)
-        current_version = await self.get_stream_version(stream_name=stream_name)
-        if current_version is None:
-            current_version = StreamState.NO_STREAM
-        await self.client.append_events(stream_name=stream_name, current_version=current_version, events=new_events)
 
-    async def shutdown(self) -> None:
-        if self.get_subscriptions():
-            await asyncio.gather(*[sub.stop() for sub in self.get_subscriptions()])
-            logger.info('All subscriptions stopped')
+        stream_version = await self.get_stream_version(stream_name=stream_name)
+        current_version = StreamState.NO_STREAM if expected_version is None else expected_version
+        try:
+            logger.debug(f'Appending {len(events)} events into "{stream_name}" stream of {self.__class__.__qualname__}')
+            await self.client.append_events(stream_name=stream_name, current_version=current_version, events=new_events)
+            logger.debug(f'New events appended to "{stream_name}" stream of {self.__class__.__qualname__}')
+        except WrongCurrentVersionError:
+            raise ExpectedVersionError(expected_version=expected_version, current_version=stream_version)
 
-        await self.client.close()
-        logger.info('Event store closed')
-
-    async def initialize(self) -> None:
-        await self.client.connect()
-        logger.info('Event store connected')
-
-    async def create_subscription(self, subscription_name: str,
-                                  subscription_parameters: KurrentDBSubscriptionParameters) -> KurrentDBSubscription:
+    async def create_subscription(
+            self, subscription_name: str,
+            subscription_parameters: KurrentDBSubscriptionParameters
+    ) -> KurrentDBSubscription:
+        logger.debug(f'Creating subscription to {self.__class__.__qualname__} with parameters {subscription_parameters}')
         kdb_subscription = await self.client.subscribe_to_all(
             commit_position=subscription_parameters.commit_position,
             from_end=subscription_parameters.from_end,
@@ -124,14 +129,21 @@ class KurrentDBEventStore(EventStore):
         self._subscriptions.append(subscription)
         return subscription
 
-    async def create_subscription_to_all(self, subscription_name: str,
-                                         last_commit_position: int) -> 'EventStoreSubscription':
+    async def create_subscription_to_all(
+            self,
+            subscription_name: str,
+            last_commit_position: int
+    ) -> 'EventStoreSubscription':
         params = KurrentDBSubscriptionParameters(commit_position=last_commit_position)
         sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
         return sub
 
-    async def create_subscription_to_events(self, subscription_name: str, event_types: List[str],
-                                            last_commit_position: int) -> 'EventStoreSubscription':
+    async def create_subscription_to_events(
+            self,
+            subscription_name: str,
+            event_types: List[str],
+            last_commit_position: int
+    ) -> 'EventStoreSubscription':
         params = KurrentDBSubscriptionParameters(
             commit_position=last_commit_position,
             filter_include=event_types,
@@ -140,8 +152,12 @@ class KurrentDBEventStore(EventStore):
         sub = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=params)
         return sub
 
-    async def create_subscription_to_stream(self, subscription_name: str, stream_name: str,
-                                            last_commit_position: int) -> EventStoreSubscription:
+    async def create_subscription_to_stream(
+            self,
+            subscription_name: str,
+            stream_name: str,
+            last_commit_position: int
+    ) -> EventStoreSubscription:
         params = KurrentDBSubscriptionParameters(
             commit_position=last_commit_position,
             filter_include=[stream_name],
@@ -172,6 +188,15 @@ class KurrentDBEventStore(EventStore):
 
     def get_subscriptions(self) -> Tuple[KurrentDBSubscription, ...]:
         return tuple(self._subscriptions)
+
+    async def initialize(self) -> None:
+        logger.info(f'Initializing {self.__class__.__qualname__} event store')
+        logger.info(f'{self.__class__.__qualname__} event store initialized')
+
+    async def shutdown(self) -> None:
+        logger.info(f'Shuting down {self.__class__.__qualname__}')
+        await asyncio.gather(*[sub.stop() for sub in self._subscriptions if sub.is_running()])
+        logger.info(f'{self.__class__.__qualname__} shut down')
 
     async def stream_exists(self, stream_name: str) -> bool:
         try:

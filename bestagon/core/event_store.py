@@ -12,6 +12,18 @@ class SubscriptionError(BestagonError):
     pass
 
 
+class ExpectedVersionError(BestagonError):
+    """Should be raised if invalid version of stream have been passed when appending new events to event store."""
+    def __init__(self, expected_version: int | None, current_version: int | None):
+        super().__init__(f'Failed to append events to event store - the provided expected version "{expected_version}" '
+                         f'does not match the current stream version "{current_version}".')
+
+
+class OptimisticConcurrencyError(BestagonError):
+    """Should be raised if there is attempt to append events to stream positin that is already recorded."""
+    pass
+
+
 class NewStreamEvent(BaseModel):
     """
     New event to store in an event store.
@@ -137,17 +149,54 @@ class EventStoreSubscription(ABC):
 class EventStore(ABC):
     """
     Abstract interface for the event store.
+    To be able to serve as a backbone of event-sourced system, the event store should satisfy multiple requirements:
+        - A resilient source of truth - the events, stored in the event store are the source of truth, they are the records of
+          important busines events that have happened and have impact on the business. The event store should
+          be able to keep these events as long as system lives.
+
+        - Append-only - events tore must ensure that new events can be ony appended to the end of
+          event stream and no event should be written to the begginning r in the middle of the stream.
+
+        - Immutable - there should be no possibility to modify already recorded event.
+
+        - Atomic writes across multiple events - if multiple events are appended to the event store the all of them should
+          be persisted in one atomic transaction or none of them in case of failure. There should be no partial writes.
+
+        - Optimistic concurrency per stream - event store should implement the optimistic concurrency mechanism, if two
+          or more clients modify a single stream at the same time, then only one should succeed.
+
+        - Two different read patterns - the event store should provide the posibility to read the entire history of events across all streams ('all' stream),
+          and the possibility to read all events for the specific event stream.
+
+        - Subscriptions - event store should provide a mechnism to subscribe to the necessary events and receive new ones when they arrive.
     """
 
     @abstractmethod
-    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...]) -> None:
-        """Reimplement to provide a logic to add new events in the event store."""
+    async def append_events(
+            self,
+            stream_name: str,
+            events: Tuple[NewStreamEvent, ...],
+            expected_version: int | None
+    ) -> None:
+        """
+        The method allows to add new events to the stream. It should satisfy three criteria:
+            - Append-only - all events should be appended to the end of the stream.
+            - Atomic writes across multiple events - all events should be written at once or none should be written in case of error.
+            - Optimistic concurrency per stream - there should be a mechanism for optimistic concurrency
+
+        :param stream_name: a name of the stream to append events
+        :param events: a tuple of NewStreamEvents to append to the stream
+        :param expected_version: stream position of the last appended event, required for optimistic concurrency control.
+
+        :raises ExpectedVersionError: if expected version does not match current stream version
+        :raises OptimisticConcurrencyError: if there is attempt to append an event to stream position that was already recorded.
+        """
         raise NotImplementedError
 
     @abstractmethod
     async def create_subscription(self, subscription_name: str, subscription_parameters: SubscriptionParameters) -> EventStoreSubscription:
         """
-        The base method that is responsible for the creation of subscription.
+        The method creates a subscriptin based on the provided parameters.
         """
         raise NotImplementedError
 

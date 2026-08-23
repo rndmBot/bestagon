@@ -1,15 +1,16 @@
 import asyncio
 import logging
 from abc import abstractmethod
-from asyncio import Queue, Lock
+from asyncio import Queue
 from dataclasses import dataclass
+from sqlite3 import IntegrityError
 from typing import Tuple, List, Union, Sequence
 
 import aiosqlite
 from bestagon.core.checkpoint_store import CheckpointStore, Checkpoint
 from bestagon.core.event_processor import Projection
 from bestagon.core.event_store import EventStore, NewStreamEvent, StreamEvent, SubscriptionParameters, \
-    EventStoreSubscription, SubscriptionError
+    EventStoreSubscription, SubscriptionError, ExpectedVersionError, OptimisticConcurrencyError
 
 logger = logging.getLogger(__name__)
 
@@ -233,48 +234,17 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
 
 
 class AIOSQLiteEventStore(EventStore):
-    @dataclass(frozen=True)
-    class NewEvent:
-        commit_position: int
-        stream_name: str
-        stream_position: int
-        event_type: str
-        payload: bytes
-        metadata: bytes
-
     def __init__(self, connection: aiosqlite.Connection):
         super().__init__()
         self._connection = connection
         self._subscriptions: List[AIOSQLiteEventStoreSubscription] = list()
-        self._write_lock = Lock()
-
-    async def _get_next_commit_position(self) -> int:
-        sql = '''SELECT MAX(commit_position) AS last_commit_position FROM events'''
-        async with self._connection.cursor() as cursor:
-            await cursor.execute(sql)
-            row = await cursor.fetchone()
-
-        commit_position = row[0]
-        if commit_position is None:
-            commit_position = 0
-        else:
-            commit_position = commit_position + 1
-
-        return commit_position
-
-    async def _get_next_stream_position(self, stream_name: str) -> int:
-        stream_version = await self.get_stream_version(stream_name)
-        if stream_version is None:
-            next_stream_position = 0
-        else:
-            next_stream_position = stream_version + 1
-        return next_stream_position
+        self._write_lock = asyncio.Lock()
 
     async def _initialize_database(self) -> None:
         logger.info(f'Initializing {self.__class__.__qualname__}')
         create_sql = '''
         CREATE TABLE IF NOT EXISTS events (
-            commit_position INT PRIMARY KEY NOT NULL,
+            commit_position INTEGER PRIMARY KEY AUTOINCREMENT,
             stream_name VARCHAR NOT NULL,
             stream_position INT NOT NULL,
             event_type VARCHAR NOT NULL,
@@ -295,58 +265,65 @@ class AIOSQLiteEventStore(EventStore):
             await self._connection.commit()
         logger.info(f'{self.__class__.__qualname__} initialized')
 
-    async def _prepare_new_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...]) -> List[NewEvent]:
-        new_events: List[AIOSQLiteEventStore.NewEvent] = list()
-        next_commit_position = await self._get_next_commit_position()
-        next_stream_position = await self._get_next_stream_position(stream_name=stream_name)
-
-        for event in events:
-            new_event = self.NewEvent(
-                commit_position=next_commit_position,
-                stream_name=stream_name,
-                stream_position=next_stream_position,
-                event_type=event.event_type,
-                payload=event.payload,
-                metadata=event.metadata
-            )
-            new_events.append(new_event)
-            next_commit_position += 1
-            next_stream_position += 1
-        return new_events
-
-    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...]) -> None:
+    async def append_events(
+            self,
+            stream_name: str,
+            events: Tuple[NewStreamEvent, ...],
+            expected_version: int | None
+    ) -> None:
         if not events:
             return
-        if not all([isinstance(e, NewStreamEvent) for e in events]):
-            raise TypeError(f'Failed to append events into {self.__class__.__qualname__}, '
-                            f'all events must be instances of NewStreamEvent class, '
-                            f'one or more events are of invalid type, please check types of the passed events.')
+        if not all(isinstance(e, NewStreamEvent) for e in events):
+            raise TypeError(
+                f'Failed to append events into {self.__class__.__qualname__}, '
+                f'all events must be instances of NewStreamEvent class, '
+                f'one or more events are of invalid type, please check types of the passed events.'
+            )
 
         async with self._write_lock:
             logger.debug(f'Appending {len(events)} events into "{stream_name}" stream of {self.__class__.__qualname__}')
-            new_events = await self._prepare_new_events(stream_name=stream_name, events=events)
-            sql = '''
-            INSERT INTO events (commit_position, stream_name, stream_position, event_type, payload, metadata)
-            VALUES (:commit_position, :stream_name, :stream_position, :event_type, :payload, :metadata)
-            '''
-
             try:
+                current_version = await self.get_stream_version(stream_name=stream_name)
+                if expected_version != current_version:
+                    raise ExpectedVersionError(expected_version, current_version)
+
+                next_stream_position = 0 if current_version is None else current_version + 1
+                data = list()
+                for event in events:
+                    datum = {
+                        'stream_name': stream_name,
+                        'stream_position': next_stream_position,
+                        'event_type': event.event_type,
+                        'payload': event.payload,
+                        'metadata': event.metadata
+                    }
+                    data.append(datum)
+                    next_stream_position += 1
+
+                sql = '''
+                INSERT INTO events (stream_name, stream_position, event_type, payload, metadata)
+                VALUES (:stream_name, :stream_position, :event_type, :payload, :metadata)
+                '''
+
                 async with self._connection.cursor() as cursor:
-                    for new_event in new_events:
-                        params = {
-                            'commit_position': new_event.commit_position,
-                            'stream_name': new_event.stream_name,
-                            'stream_position': new_event.stream_position,
-                            'event_type': new_event.event_type,
-                            'payload': new_event.payload,
-                            'metadata': new_event.metadata
-                        }
-                        await cursor.execute(sql, parameters=params)
-                await self._connection.commit()
+                    await cursor.executemany(sql, parameters=data)
+                    await self._connection.commit()
                 logger.debug(f'New events appended to "{stream_name}" stream of {self.__class__.__qualname__}')
+            except ExpectedVersionError as e:
+                await self._connection.rollback()
+                raise e
+            except IntegrityError as e:
+                await self._connection.rollback()
+                if 'UNIQUE constraint failed' in str(e):
+                    raise OptimisticConcurrencyError(
+                        f'Failed to append events to event store: one or more events already '
+                        f'exists in the provided stream position'
+                    ) from e
+                else:
+                    raise e
             except Exception as e:
                 await self._connection.rollback()
-                logger.exception(f'Failed to append new events into "{stream_name}" stream: {e}')
+                logger.exception(e)
                 raise e
 
     async def create_subscription(self, subscription_name: str, subscription_parameters: 'AIOSQLiteSubscriptionParameters') -> 'AIOSQLiteEventStoreSubscription':

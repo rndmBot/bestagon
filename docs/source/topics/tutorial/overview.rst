@@ -4,6 +4,32 @@ Architectural overview
 
 This chapter will give you a necessary architectural and conceptual overview of the framework.
 
+
+Event-Sourced Aggregate
+---------
+
+The bestagon follows `Hexagonal Architecture` very closely. In the middle of your system lies
+a domain model that consist of one or several event-sourced aggregates. These aggregates represent
+business entities that exist in your domain, for example `Customer`, `Ticket` and so on, and contain
+all the business logic. These aggregates also serve as a source of business events - every time
+something changes in your domain model it is captured as an event and persisted.
+
+Aggregate is another crucial part of your system.
+You implement your domain model using event-sourced aggregates and your business logic lives inside an aggregate.
+They serve as a source of domain events - when you execute business logic inside an aggregate, it usually changes the state of the aggregate.
+These changes are captured as immutable events and exactly these events are stored in an event store.
+Let's take a Customer aggregate as an example - it can be Created, if a Customer has suspicious behavior,
+it can be Blocked and Unblocked if analysis shows that everything is good for the customer.
+
+.. image:: images/aggregate.png
+    :alt: aggregate
+    :align: center
+
+In almost all cases, you do not work with aggregates directly, you implement use cases in your application classes
+where you create or retrieve existing aggregates, execute business logic and save changes in repository.
+
+These are the basic building blocks of your system. In the next chapter we will take a look at the Aggregate in more detail.
+
 System
 ------
 
@@ -60,21 +86,3 @@ Projections only read events from the event store, and populate read models.
     :alt: reaction to events
     :align: center
 
-Aggregate
----------
-
-Aggregate is another crucial part of your system.
-You implement your domain model using event-sourced aggregates and your business logic lives inside an aggregate.
-They serve as a source of domain events - when you execute business logic inside an aggregate, it usually changes the state of the aggregate.
-These changes are captured as immutable events and exactly these events are stored in an event store.
-Let's take a Customer aggregate as an example - it can be Created, if a Customer has suspicious behavior,
-it can be Blocked and Unblocked if analysis shows that everything is good for the customer.
-
-.. image:: images/aggregate.png
-    :alt: aggregate
-    :align: center
-
-In almost all cases, you do not work with aggregates directly, you implement use cases in your application classes
-where you create or retrieve existing aggregates, execute business logic and save changes in repository.
-
-These are the basic building blocks of your system. In the next chapter we will take a look at the Aggregate in more detail.
