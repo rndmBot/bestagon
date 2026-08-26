@@ -3,9 +3,9 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-=======================
-Welcome to Bestagon
-=======================
+.. image:: images/bestagon_logo.png
+    :alt: logo
+    :align: center
 
 **Bestagon** is an asynchronous framework for event-sourcing in Python. It provides a fast and easy way
 to build event-sourced applications following the best practices of DDD+ES+CQRS and helps to
