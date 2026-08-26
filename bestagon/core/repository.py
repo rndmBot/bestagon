@@ -1,16 +1,17 @@
 import logging
 from itertools import pairwise
-from typing import List
+from typing import List, Tuple
 
 from bestagon.core.aggregate import Aggregate, DomainEvent
 from bestagon.core.mapper import mapper
 from bestagon.core.event_store import EventStore
-from bestagon.core.exceptions import AggregateNotFoundError, IntegrityError
+from bestagon.core.exceptions import AggregateNotFoundError, AggregateVersionError
 
 logger = logging.getLogger(__name__)
 
 
 class EventSourcedRepository:
+    # TODO - logging
     def __init__(self, event_store: EventStore):
         self._event_store = event_store
 
@@ -21,6 +22,30 @@ class EventSourcedRepository:
     @staticmethod
     def _create_stream_name(aggregate_type: str, aggregate_id: str) -> str:
         return f'{aggregate_type}-{aggregate_id}'
+
+    @staticmethod
+    def _validate_events(events: Tuple[DomainEvent, ...]) -> None:
+        # Events cannot be empty list
+        if not events:
+            raise ValueError(
+                f'Events validation failed - events should be a non empty list of {DomainEvent.__class__.__qualname__} instances.'
+            )
+
+        # Events should be a list of DomainEvent class
+        if not all([isinstance(event, DomainEvent) for event in events]):
+            raise TypeError(
+                f'Events validation failed - all appended events should be instances of {DomainEvent.__class__.__qualname__} class.'
+            )
+
+        # Event versions should be monotonically increasing
+        stream_positions = [event.metadata.aggregate_version for event in events]
+        diffs = [y - x for x, y in pairwise(stream_positions)]
+        gapless = all([True if d == 1 else False for d in diffs])
+        if not gapless:
+            raise AggregateVersionError(
+                'Events validation failed - aggregate verions of events should be a monotonically increasing sequence of integers, '
+                f'provided events contain events out of order or/and events with gaps in aggregate version: {stream_positions}'
+            )
 
     async def contains(self, aggregate_type: str, aggregate_id: str) -> bool:
         stream_id = self._create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
@@ -56,18 +81,20 @@ class EventSourcedRepository:
         return aggregate
 
     async def save(self, aggregate: Aggregate) -> None:
-        if not aggregate.pending_events:
+        events = aggregate.pending_events
+        if not events:
             return
+        self._validate_events(events=events)
 
-        # Events validation - aggregate version must be monotonically increasing
-        versions = [event.metadata.aggregate_version for event in aggregate.pending_events]
-        diffs = [y - x for x, y in pairwise(versions)]
-        gapless = all([True if d == 1 else False for d in diffs])
-        if not gapless:
-            logger.debug(f'{aggregate.aggregate_id}: {versions}')
-            raise IntegrityError('Invalid aggregate version: each aggregate event should have version exactly one more than previous.')
-
-        new_stored_events = tuple(mapper.to_new_stream_event(domain_event) for domain_event in aggregate.pending_events)
+        last_event_version = events[0].metadata.aggregate_version
+        expected_version = None if last_event_version == 0 else last_event_version - 1
         stream_name = self._create_stream_name(aggregate_type=aggregate.get_aggregate_type(), aggregate_id=aggregate.aggregate_id)
-        await self.event_store.append_events(stream_name=stream_name, events=new_stored_events)
+
+        new_stored_events = tuple(
+            mapper.to_new_event_store_event(domain_event) for domain_event in aggregate.pending_events)
+        await self.event_store.append_events(
+            stream_name=stream_name,
+            events=new_stored_events,
+            expected_version=expected_version
+        )
         aggregate.clear_events()

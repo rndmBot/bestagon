@@ -26,6 +26,8 @@ class SystemHealth:
 
 
 class EventSourcedSystem(ABC):
+    # TODO - IDEA - make add_application/projection synchronous and add apps to queue, on initialization it should be consumed and apps should be initialized
+
     def __init__(self, event_store: EventStore, checkpoint_store: CheckpointStore):
         self._event_store = event_store
         self._checkpoint_store = checkpoint_store
@@ -116,7 +118,7 @@ class EventSourcedSystem(ABC):
         self.register_query_handlers()
         self.register_aggregate_types()
         self.register_event_types()
-        await self.event_store.connect()
+        await self.event_store.initialize()
         await self.checkpoint_store.initialize()
 
     async def rebuild_projection(self, name: str) -> None:
@@ -147,5 +149,5 @@ class EventSourcedSystem(ABC):
         for proj in self.projections:
             await proj.stop()
 
-        await self.event_store.close()
+        await self.event_store.shutdown()
         await self.checkpoint_store.close()

@@ -42,7 +42,7 @@ class Neo4jCheckpointStore(CheckpointStore):
             if value is not None:
                 value = value.value()
             else:
-                value = 0
+                value = None
 
         checkpoint = Checkpoint(name=name, value=value)
         return checkpoint

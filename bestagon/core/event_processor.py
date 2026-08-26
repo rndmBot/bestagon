@@ -31,7 +31,7 @@ class EventProcessor(ABC):
     def running(self) -> bool:
         if self.subscription is None:
             return True
-        return self.subscription.running
+        return self.subscription.is_running()
 
     @property
     def subscription(self) -> Union[EventStoreSubscription, None]:
@@ -57,7 +57,7 @@ class EventProcessor(ABC):
             await handler(event)
 
     async def _consume_subscription(self) -> None:
-        while self.subscription.running:
+        while self.subscription.is_running():
             try:
                 stream_event = await self.subscription.next_event()
                 domain_event = mapper.to_domain_event(stream_event)
@@ -86,7 +86,7 @@ class EventProcessor(ABC):
     async def stop(self) -> None:
         if self.subscription is None:
             return
-        if self.subscription.running:
+        if self.subscription.is_running():
             await self.subscription.stop()
         if not self._subscription_task.done():
             self._subscription_task.cancel()
@@ -117,11 +117,9 @@ class EventProcessor(ABC):
         checkpoint_name = self.get_checkpoint_name()
 
         checkpoint = await self.checkpoint_store.get_checkpoint(name=checkpoint_name)
-        subscription = await event_store.create_subscription_to_events(
-            subscription_name=subscription_name,
-            events=event_types,
-            start_position=checkpoint.value
-        )
+        subscription = await event_store.create_subscription_to_events(subscription_name=subscription_name,
+                                                                       event_types=event_types,
+                                                                       last_commit_position=checkpoint.value)
 
         self._subscription = subscription
         self._subscription_task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')

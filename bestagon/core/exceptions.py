@@ -1,8 +1,8 @@
-class DomainException(Exception):
+class BestagonError(Exception):
     pass
 
 
-class BestagonError(Exception):
+class DomainException(BestagonError):
     pass
 
 

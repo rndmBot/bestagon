@@ -5,7 +5,7 @@ from dataclasses import asdict
 from typing import Type, Dict, Callable, List
 
 from bestagon.core.aggregate import Aggregate, DomainEvent, DomainEventMetadata
-from bestagon.core.event_store import StreamEvent, NewStreamEvent
+from bestagon.core.event_store import EventStoreEvent, NewEventStoreEvent
 from bestagon.core.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError, HandlerAlreadyRegistered
 from bestagon.core.message import Query, Command
 
@@ -90,7 +90,7 @@ class Mapper:
             raise TypeError(f'Invalid query type {query_type}')
         self._query_handler_map[query_type] = handler
 
-    def to_domain_event(self, stream_event: StreamEvent) -> DomainEvent:
+    def to_domain_event(self, stream_event: EventStoreEvent) -> DomainEvent:
         # TODO - Metadata class is hardcoded, rethink the concept - is there a possibility to use another class for metadata???
         event_class = self.get_event_class(event_type=stream_event.event_type)
         metadata_dict = json.loads(stream_event.metadata.decode())
@@ -100,13 +100,12 @@ class Mapper:
         domain_event = event_class(metadata=metadata, **payload_dict)
         return domain_event
 
-    def to_new_stream_event(self, domain_event: DomainEvent) -> NewStreamEvent:
+    def to_new_event_store_event(self, domain_event: DomainEvent) -> NewEventStoreEvent:
         event_type = self.get_event_type(type(domain_event))
         payload = json.dumps(domain_event.get_payload()).encode()
         metadata = json.dumps(asdict(domain_event.metadata)).encode()
 
-        new_stream_event = NewStreamEvent(
-            stream_position=domain_event.metadata.aggregate_version,
+        new_stream_event = NewEventStoreEvent(
             event_type=event_type,
             payload=payload,
             metadata=metadata
@@ -114,6 +113,7 @@ class Mapper:
         return new_stream_event
 
 
+# TODO - to many modules depend on this class, how to reduce this dependncy?
 mapper = Mapper()
 
 
