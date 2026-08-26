@@ -90,7 +90,8 @@ class EventSourcedRepository:
         expected_version = None if last_event_version == 0 else last_event_version - 1
         stream_name = self._create_stream_name(aggregate_type=aggregate.get_aggregate_type(), aggregate_id=aggregate.aggregate_id)
 
-        new_stored_events = tuple(mapper.to_new_stream_event(domain_event) for domain_event in aggregate.pending_events)
+        new_stored_events = tuple(
+            mapper.to_new_event_store_event(domain_event) for domain_event in aggregate.pending_events)
         await self.event_store.append_events(
             stream_name=stream_name,
             events=new_stored_events,

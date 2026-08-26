@@ -18,9 +18,9 @@ You can use pip to install library from PyPi:
 
 The core Bestagon package contains only required dependencies.
 It is a perfect choice for those who wants to implement it's own adapters from scratch,
-but the Bestagon also provides ready to use adapters, for example implementation of event store
-using Kurrent event store or AIOSQLite database,
-such adapters require additional modules that can be installed using optional dependencies.
+but the Bestagon also provides ready to use adapters, for example implementation of the event store
+that uses KurrentDB or AIOSQLite, such adapters require additional modules that can be
+installed using optional dependencies.
 
 If you want to use `Kurrent <https://www.kurrent.io/>`_ event store in your projects then you can install it with "kurrentdb" option:
 

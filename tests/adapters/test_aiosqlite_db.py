@@ -13,7 +13,7 @@ from bestagon.adapters.aiosqlite_db import (
 )
 from bestagon.core.event_store import (
     ExpectedVersionError,
-    NewStreamEvent,
+    NewEventStoreEvent,
     OptimisticConcurrencyError,
     SubscriptionError,
 )
@@ -25,8 +25,8 @@ VALUES (?, ?, ?, ?, ?)
 '''
 
 
-def new_event(event_type: str = 'TestEvent', payload: bytes = b'payload', metadata: bytes = b'metadata') -> NewStreamEvent:
-    return NewStreamEvent(event_type=event_type, payload=payload, metadata=metadata)
+def new_event(event_type: str = 'TestEvent', payload: bytes = b'payload', metadata: bytes = b'metadata') -> NewEventStoreEvent:
+    return NewEventStoreEvent(event_type=event_type, payload=payload, metadata=metadata)
 
 
 @pytest_asyncio.fixture

@@ -12,14 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 of the specified stream or -1 if stream not exists.
 - New adapter - `AIOSQLiteEventStore` event store implementation using `aiosqlite` module.
 - New abstract method for `EventStoreSubscription` class - `start`.
-- Removed property `running` of `EventStoreSubscription`.
-- `EventStore` `connect` method renamed to `initialize`
-- `EventStore` `close` method renamed to `shutdown`
+
 
 ### Changed
 - Documentation improvements
 - `NewStreamEvent` stream_position parameter removed, the stream position should be assigned
 by event store automatically, not by passing a parameter in new event.
+- Removed property `running` of `EventStoreSubscription`.
+- `EventStore` `connect` method renamed to `initialize`
+- `EventStore` `close` method renamed to `shutdown`
+- `NewStreamEvent` renamed to `NewEventStoreEvent`
+- `StreamEvent` renamed to `EventStoreEvent`
+- `EventStore's` method `appnd_events` now requires additional parameter - 'expected_version' that is
+required for optimistic concurrency.
 
 
 ## [0.7.0] - 2026-05-09

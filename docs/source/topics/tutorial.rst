@@ -8,7 +8,6 @@ This chapter shows how to start to develop event-sourced applications with besta
     :maxdepth: 2
     :caption: Tutorial:
 
-    tutorial/overview
     tutorial/aggregate
     tutorial/application
     tutorial/projection

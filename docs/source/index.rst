@@ -11,8 +11,7 @@ Welcome to Bestagon
 to build event-sourced applications following the best practices of DDD+ES+CQRS and helps to
 gracefully manage the complexity of various business domains.
 
-The Bestagon grasped a lot of
-inspiration from
+The Bestagon grasped a lot of inspiration from
 `Hexagonal Architecture <https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)>`_, and
 it is the perfect choice for building microservices according to this pattern.
 
@@ -58,6 +57,7 @@ The project is hosted on `GitHub <https://github.com/rndmBot/bestagon>`_
    :maxdepth: 2
 
    topics/installation
+   topics/overview
    topics/tutorial
    topics/concepts
    topics/support

@@ -8,8 +8,8 @@ from kurrentdbclient import StreamState, NewEvent, DEFAULT_EXCLUDE_FILTER, Async
 from kurrentdbclient.common import DEFAULT_WINDOW_SIZE, DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER
 from kurrentdbclient.exceptions import NotFoundError, WrongCurrentVersionError
 
-from bestagon.core.event_store import EventStore, SubscriptionParameters, EventStoreSubscription, StreamEvent, \
-    NewStreamEvent, ExpectedVersionError, SubscriptionError
+from bestagon.core.event_store import EventStore, SubscriptionParameters, EventStoreSubscription, EventStoreEvent, \
+    NewEventStoreEvent, ExpectedVersionError, SubscriptionError
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,12 @@ class KurrentDBSubscription(EventStoreSubscription):
     def is_running(self) -> bool:
         return self._running
 
-    async def next_event(self) -> StreamEvent:
+    async def next_event(self) -> EventStoreEvent:
         if not self._running:
             raise StopAsyncIteration
 
         event = await anext(self._kdb_subscription)
-        stream_event = StreamEvent(
+        stream_event = EventStoreEvent(
             stream_name=event.stream_name,
             stream_position=event.stream_position,
             commit_position=event.commit_position,
@@ -74,10 +74,10 @@ class KurrentDBEventStore(EventStore):
         self._subscriptions: List[KurrentDBSubscription] = list()
         self.client = client
 
-    async def append_events(self, stream_name: str, events: Tuple[NewStreamEvent, ...], expected_version: int | None = None) -> None:
+    async def append_events(self, stream_name: str, events: Tuple[NewEventStoreEvent, ...], expected_version: int | None = None) -> None:
         if not events:
             return
-        if not all(isinstance(e, NewStreamEvent) for e in events):
+        if not all(isinstance(e, NewEventStoreEvent) for e in events):
             raise TypeError(
                 f'Failed to append events into {self.__class__.__qualname__}, '
                 f'all events must be instances of NewStreamEvent class, '
@@ -171,11 +171,11 @@ class KurrentDBEventStore(EventStore):
             return None
         return version
 
-    async def get_stream(self, stream_name: str) -> Tuple[StreamEvent]:
+    async def get_stream(self, stream_name: str) -> Tuple[EventStoreEvent]:
         events = await self.client.get_stream(stream_name=stream_name)
         stream_events = list()
         for event in events:
-            stream_event = StreamEvent(
+            stream_event = EventStoreEvent(
                 stream_name=stream_name,
                 stream_position=event.stream_position,
                 commit_position=event.commit_position,

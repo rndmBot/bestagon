@@ -9,7 +9,7 @@ from typing import Tuple, List, Union, Sequence
 import aiosqlite
 from bestagon.core.checkpoint_store import CheckpointStore, Checkpoint
 from bestagon.core.event_processor import Projection
-from bestagon.core.event_store import EventStore, NewStreamEvent, StreamEvent, SubscriptionParameters, \
+from bestagon.core.event_store import EventStore, NewEventStoreEvent, EventStoreEvent, SubscriptionParameters, \
     EventStoreSubscription, SubscriptionError, ExpectedVersionError, OptimisticConcurrencyError
 
 logger = logging.getLogger(__name__)
@@ -192,7 +192,7 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
                     columns = [d[0] for d in cursor.description]
                     for row in rows:
                         data = dict(zip(columns, row))
-                        event = StreamEvent(**data)
+                        event = EventStoreEvent(**data)
                         await self._event_queue.put(event)
                         self._last_commit_position = event.commit_position
                 await asyncio.sleep(self._parameters.poll_interval)
@@ -208,7 +208,7 @@ class AIOSQLiteEventStoreSubscription(EventStoreSubscription):
         else:
             return not self._subscription_task.done()
 
-    async def next_event(self) -> StreamEvent:
+    async def next_event(self) -> EventStoreEvent:
         if not self.is_running():
             raise StopAsyncIteration
 
@@ -268,12 +268,21 @@ class AIOSQLiteEventStore(EventStore):
     async def append_events(
             self,
             stream_name: str,
-            events: Tuple[NewStreamEvent, ...],
+            events: Tuple[NewEventStoreEvent, ...],
             expected_version: int | None
     ) -> None:
+        """
+        Uniqueness constraint is a real optimistic concurrency.
+        AUTOINCREMENT guarantees that commit position will be monotonically increasing.
+
+        :param stream_name:
+        :param events:
+        :param expected_version:
+        :return:
+        """
         if not events:
             return
-        if not all(isinstance(e, NewStreamEvent) for e in events):
+        if not all(isinstance(e, NewEventStoreEvent) for e in events):
             raise TypeError(
                 f'Failed to append events into {self.__class__.__qualname__}, '
                 f'all events must be instances of NewStreamEvent class, '
@@ -364,7 +373,7 @@ class AIOSQLiteEventStore(EventStore):
         subscription = await self.create_subscription(subscription_name=subscription_name, subscription_parameters=parameters)
         return subscription
 
-    async def get_stream(self, stream_name: str) -> Tuple[StreamEvent, ...]:
+    async def get_stream(self, stream_name: str) -> Tuple[EventStoreEvent, ...]:
         sql = '''
         SELECT *
         FROM events
@@ -381,7 +390,7 @@ class AIOSQLiteEventStore(EventStore):
             events = list()
             for row in rows:
                 datum = dict(zip(columns, row))
-                event = StreamEvent(**datum)
+                event = EventStoreEvent(**datum)
                 events.append(event)
         return tuple(events)
 

@@ -24,10 +24,14 @@ class OptimisticConcurrencyError(BestagonError):
     pass
 
 
-class NewStreamEvent(BaseModel):
+class NewEventStoreEvent(BaseModel):
     """
-    New event to store in an event store.
-    This class have to be used when you want to append new events in the event store.
+    The class represent the new event to be appended to an event store.
+
+    Fields:
+        - event_type - a string with type of the event, for example 'CustomerCreated'.
+        - payload - contains a business domain specific information about what have happened. Should be in bytes format.
+        - metadata - contains non-business related data that is required for aggregate reconstruction and etc.
     """
     model_config = ConfigDict(strict=True)
 
@@ -37,10 +41,10 @@ class NewStreamEvent(BaseModel):
 
 
 @dataclass(frozen=True)
-class StreamEvent:
+class EventStoreEvent:
     """
-    Stream events represent events that already saved in the event store and they are returned every time
-    you retrieve events from it.
+    Event store events represent events that already saved in the event store. Every time you retrieve events from
+    event store, they are returned in the form of EventStoreEvent.
 
     Fields:
         - commit_position - the position of an event in a global sequence of events across the whole event store
@@ -62,7 +66,7 @@ class StreamEvent:
 class SubscriptionParameters:
     """
     Each storage technology provides it's own set of parameters for subscription and this class should be
-    reimplemented to provide subscription parameters for the specific technology,for example Kurrent event store or AIOSQLite database.
+    reimplemented to provide subscription parameters for the specific technology, for example Kurrent event store or SQLite database.
     """
     pass
 
@@ -70,7 +74,7 @@ class SubscriptionParameters:
 class EventStoreSubscription(ABC):
     """
     The base class for event store subscription.
-    You usually do not instantiate subscription by yourself, it is responsibility of event store.
+    You usually do not instantiate subscription by yourself, it is responsibility of the event store.
     Each subscription contains unique identifier in the form of UUID4. In addition to identifier an optional name can be provided.
 
     Conceptually each subsctription is an AsyncIterator that can be awaited to receive new events.
@@ -138,7 +142,7 @@ class EventStoreSubscription(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def next_event(self) -> StreamEvent:
+    async def next_event(self) -> EventStoreEvent:
         """
         When awaited the method should return the next event to be processed. If there are no new events in the
         event store then then method should return control to the event loop until the new event appears.
@@ -150,12 +154,11 @@ class EventStore(ABC):
     """
     Abstract interface for the event store.
     To be able to serve as a backbone of event-sourced system, the event store should satisfy multiple requirements:
-        - A resilient source of truth - the events, stored in the event store are the source of truth, they are the records of
-          important busines events that have happened and have impact on the business. The event store should
+        - A resilient source of truth - the events, stored in the event store are the source of truth, the event store should
           be able to keep these events as long as system lives.
 
-        - Append-only - events tore must ensure that new events can be ony appended to the end of
-          event stream and no event should be written to the begginning r in the middle of the stream.
+        - Append-only - event store must ensure that new events can be only appended to the end of
+          event stream and no event should be written to the begginning or in the middle of the stream.
 
         - Immutable - there should be no possibility to modify already recorded event.
 
@@ -175,7 +178,7 @@ class EventStore(ABC):
     async def append_events(
             self,
             stream_name: str,
-            events: Tuple[NewStreamEvent, ...],
+            events: Tuple[NewEventStoreEvent, ...],
             expected_version: int | None
     ) -> None:
         """
@@ -225,7 +228,7 @@ class EventStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_stream(self, stream_name: str) -> Tuple[StreamEvent, ...]:
+    async def get_stream(self, stream_name: str) -> Tuple[EventStoreEvent, ...]:
         """
         Reimplement to return all event from the specified stream.
         """

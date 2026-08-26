@@ -20,11 +20,11 @@ from bestagon.adapters.kurrent import (
     KurrentDBSubscription,
     KurrentDBSubscriptionParameters,
 )
-from bestagon.core.event_store import ExpectedVersionError, NewStreamEvent, StreamEvent, SubscriptionError
+from bestagon.core.event_store import ExpectedVersionError, NewEventStoreEvent, EventStoreEvent, SubscriptionError
 
 
-def new_event(event_type: str = 'TestEvent', payload: bytes = b'payload', metadata: bytes = b'metadata') -> NewStreamEvent:
-    return NewStreamEvent(event_type=event_type, payload=payload, metadata=metadata)
+def new_event(event_type: str = 'TestEvent', payload: bytes = b'payload', metadata: bytes = b'metadata') -> NewEventStoreEvent:
+    return NewEventStoreEvent(event_type=event_type, payload=payload, metadata=metadata)
 
 
 def recorded_event(
@@ -215,7 +215,7 @@ class TestKurrentDBSubscription:
 
         event = await subscription.next_event()
 
-        assert event == StreamEvent(
+        assert event == EventStoreEvent(
             stream_name='stream-a',
             stream_position=3,
             commit_position=42,
@@ -393,7 +393,7 @@ class TestKurrentDBEventStoreReads:
         stream = await event_store.get_stream('stream-a')
 
         assert stream == (
-            StreamEvent(
+            EventStoreEvent(
                 stream_name='stream-a',
                 stream_position=0,
                 commit_position=1,
@@ -401,7 +401,7 @@ class TestKurrentDBEventStoreReads:
                 payload=b'p0',
                 metadata=b'm0',
             ),
-            StreamEvent(
+            EventStoreEvent(
                 stream_name='stream-a',
                 stream_position=1,
                 commit_position=2,
