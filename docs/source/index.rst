@@ -59,6 +59,7 @@ The project is hosted on `GitHub <https://github.com/rndmBot/bestagon>`_
    topics/installation
    topics/overview
    topics/tutorial
+   topics/modules
    topics/concepts
    topics/support
    topics/examples
