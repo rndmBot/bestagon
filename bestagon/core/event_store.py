@@ -47,12 +47,14 @@ class EventStoreEvent:
     event store, they are returned in the form of EventStoreEvent.
 
     Fields:
+
         - commit_position - the position of an event in a global sequence of events across the whole event store
         - stream_position - the position of an event in a specific stream.
         - event_type - a string with a type of an event, for example 'AggregateCreated'
         - payload - contains a buiness specific information that answers what exactly have changed in your domain
         - metadata - contains non domain related information, for example timestamp when event created, id of aggregate that
-        generated an event, etc.
+          generated an event, etc.
+
     """
     stream_name: str
     stream_position: int  # Position in aggregate sequence
@@ -81,8 +83,9 @@ class EventStoreSubscription(ABC):
     Examples of subscription usage:
     1. Directly calling next_event to receive the next event.
     2. Using async for syntax, for example:
-        async for event in subscription:
-            process_event(event)
+
+    async for event in subscription:
+        process_event(event)
     """
     def __init__(self, name: str | None = None):
         self._name = name
@@ -154,6 +157,7 @@ class EventStore(ABC):
     """
     Abstract interface for the event store.
     To be able to serve as a backbone of event-sourced system, the event store should satisfy multiple requirements:
+
         - A resilient source of truth - the events, stored in the event store are the source of truth, the event store should
           be able to keep these events as long as system lives.
 
