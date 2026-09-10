@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "bestagon"
-version = "0.8.0"
+version = "0.9.0"
 authors = [
   {name="Aleksandr Antonov", email="antonov.o779@gmail.com"},
 ]
