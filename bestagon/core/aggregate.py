@@ -1,13 +1,57 @@
+import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
 from typing import List, Tuple
+from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 from bestagon.core.exceptions import AggregateIDMismatch, AggregateVersionError
 
 
+# TODO - ugly AF
+class _DomainEventMetadata(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='allow')
+    __pydantic_extra__: dict[str, JsonValue]
+
+    event_id: str
+    timestamp: datetime.datetime
+    aggregate_id: str
+    aggregate_version: int
+    aggregate_type: str
+
+    @staticmethod
+    def create_event_id() -> str:
+        return str(uuid4())
+
+    @staticmethod
+    def create_timestamp() -> datetime.datetime:
+        return datetime.datetime.now(datetime.UTC)
+
+    @classmethod
+    def from_aggregate(cls, aggregate: 'Aggregate') -> '_DomainEventMetadata':
+        obj = cls(
+            event_id=cls.create_event_id(),
+            timestamp=cls.create_timestamp(),
+            aggregate_id=aggregate.aggregate_id,
+            aggregate_version=aggregate.next_version,
+            aggregate_type=aggregate.aggregate_type
+        )
+        return obj
+
+    @classmethod
+    def from_json(cls, json_string: str) -> '_DomainEventMetadata':
+        obj = cls.model_validate_json(json_data=json_string)
+        return obj
+
+    def to_json(self) -> str:
+        data = self.model_dump_json()
+        return data
+
+
 @dataclass(frozen=True)
 class DomainEventMetadata:
+    # TODO - refactor, use unfrozen dataclass or typed dict
     """
     Contains the data that is not related to the business domain.
     DO NOT base business decisions on metadata.
@@ -20,7 +64,7 @@ class DomainEventMetadata:
 
     @staticmethod
     def create_timestamp() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 @dataclass(frozen=True)
@@ -121,13 +165,13 @@ class Aggregate(ABC):
     def __init__(self, event: Created):
         self._aggregate_id = event.metadata.aggregate_id
         self._aggregate_version = event.metadata.aggregate_version
-        self._aggregate_created_on = datetime.fromisoformat(event.metadata.timestamp)
-        self._aggregate_modified_on = datetime.fromisoformat(event.metadata.timestamp)
+        self._aggregate_created_on = datetime.datetime.fromisoformat(event.metadata.timestamp)
+        self._aggregate_modified_on = datetime.datetime.fromisoformat(event.metadata.timestamp)
 
         self._pending_events: List[DomainEvent] = list()
 
     @property
-    def aggregate_created_on(self) -> datetime:
+    def aggregate_created_on(self) -> datetime.datetime:
         """The date and time when the aggregate was created."""
         return self._aggregate_created_on
 
@@ -136,7 +180,7 @@ class Aggregate(ABC):
         return self._aggregate_id
 
     @property
-    def aggregate_modified_on(self) -> datetime:
+    def aggregate_modified_on(self) -> datetime.datetime:
         """The date and time when the aggregate was modified."""
         return self._aggregate_modified_on
 
