@@ -2,6 +2,14 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class CommandMetadata:
+    correlation_id: str | None = None
+    causation_id: str | None = None
+    trace_id: str | None = None
+    span_id: str | None = None
+
+
+@dataclass(frozen=True)
 class Command:
     """
     A fundamental concept of event sourcing that is easily overlooked: commands are inextricably linked to the state of the world at the time the command was created.
@@ -12,8 +20,8 @@ class Command:
 
     Source: https://blog.cosmonic.com/engineering/commands-are-not-real/
     """
-    # TODO - commands sent through a command bus should allow the result to be returned
-    pass
+
+    metadata: CommandMetadata
 
 
 @dataclass(frozen=True)

@@ -5,6 +5,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.9.0] - 2026-09
+WARNING - the update contains breaking changes which makes this version not backward compatible with
+previous versions.
+### Added
+- `Command` now contains new mandatory attribute `metadata` which should be an instance of
+  `CommandMetadata` class
+- New `CommandMetadata` class which contains new fields for observability.
+- New `DomainEventContext` class which contains data that could be propagated from event to event.
+
+### Changed
+- `DomainEventMetadata` class now contains new mandatory field `event_id`
+- `DomainEventMetadata` class now contains new fields for identification and observability
+- `DomainEventMetadata` class now contains new conveniece factory methods to create metadata from
+  aggregate instance.
+- `Aggregate`'s `_create` method renamed to `create_aggregate`
+- `EventSourcedRepository` now uses `aggregate_id` as stream name instead of combination of
+  `aggregate_type` + `aggregate_id`. This change is breaking, it will not be possible to retrieve agregates
+  created with previous versions of framework.
+
+
 ## [0.8.0] - 2026-08
 ### Added
 - New documentation topic - Installation

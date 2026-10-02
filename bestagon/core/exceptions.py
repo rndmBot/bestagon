@@ -2,30 +2,6 @@ class BestagonError(Exception):
     pass
 
 
-class DomainException(BestagonError):
-    pass
-
-
-class AggregateNotFoundError(BestagonError):
-    pass
-
-
-class AggregateIDMismatch(BestagonError):
-    pass
-
-
-class AggregateVersionError(BestagonError):
-    pass
-
-
-class IntegrityError(BestagonError):
-    pass
-
-
-class HandlerNotFound(BestagonError):
-    pass
-
-
 class HandlerAlreadyRegistered(BestagonError):
     pass
 
