@@ -1,7 +1,7 @@
 import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
-from typing import List, Tuple, Type, TYPE_CHECKING, Dict, Callable
+from typing import List, Tuple, Type, TYPE_CHECKING
 from uuid import uuid4
 
 from bestagon.core.exceptions import BestagonError
@@ -302,8 +302,7 @@ class Aggregate(ABC):
         Reimplement to provide change of state of the aggregate when event occur.
         Each event must have the associated event handler.
         """
-        event_routing = self.get_event_routing()
-        handler = event_routing.get(type(event))
+        handler = self._event_handler_map.get(type(event))
         if handler is not None:
             handler(event)
         else:
@@ -325,7 +324,7 @@ class Aggregate(ABC):
         return events
 
     @classmethod
-    def create_aggregate(cls, event: 'Created') -> 'Aggregate':
+    def create_aggregate(cls, event: 'Created', metadata: DomainEventMetadata) -> 'Aggregate':
         """Actually creates new aggregate. Should be used by factory method implemented on specific aggregate instance."""
         if event.metadata.aggregate_version != cls.INITIAL_VERSION:
             raise AggregateVersionError(
@@ -333,7 +332,7 @@ class Aggregate(ABC):
                 f'expected aggregate version {cls.INITIAL_VERSION}, got {event.metadata.aggregate_version}'
             )
 
-        obj = cls(event=event)
+        obj = cls(event=event, metadata=metadata)
         obj._pending_events.append(event)
         return obj
 
@@ -352,27 +351,6 @@ class Aggregate(ABC):
         """
         Aggregate type should be defined during modelling stage and MUST NOT BE CHANGED during the entire aggregate lifecycle.
         It is used by repository to retreive specific aggregate instances and by event store as prefix to event stream.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_event_routing(self) -> Dict[Type[DomainEvent], Callable]:
-        """
-        Event routing maps events to corresponding event handlers.
-        Event handler is a method, defined in the aggregate class that takes event as input parameter
-        and changes the state of the aggregate using values from the event.
-
-        IMPORTANT - the change of the aggregate state should be made ONLY INSIDE THE EVENT HANDLER, never in any other
-        part of the aggregate.
-
-        Event routing example:
-            {
-                self.CustomerCreated: self._when_customer_created,
-                self.CustomerBlocked: self._when_customer_blocked,
-                ...
-            }
-
-        :return: mapping from event to corresponding event handler
         """
         raise NotImplementedError
 
