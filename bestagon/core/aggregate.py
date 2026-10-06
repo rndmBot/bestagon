@@ -175,6 +175,15 @@ class DomainEvent:
         return payload
 
 
+# TODO - define here, inside class or in separate module
+def event_handler(event_type):
+    def decorator(func):
+        # TODO - name of the attribute can be extracted to variable
+        setattr(func, '_event_type', event_type)
+        return func
+    return decorator
+
+
 class Aggregate(ABC):
     """
     A base class for event-sourced aggregate. This class should not be instantiated directly, instead it should be sublcassed
@@ -234,17 +243,19 @@ class Aggregate(ABC):
         """
         pass
 
-    def __init__(self, event: Created):
+    def __init__(self, event: Created, metadata: DomainEventMetadata):
         """
         The emthod takes `Created` event as input aprameter and sets the initial state of the aggregate.
         :param event:
         """
-        self._aggregate_id = event.metadata.aggregate_id
-        self._aggregate_version = event.metadata.aggregate_version
-        self._aggregate_created_on = event.metadata.timestamp
-        self._aggregate_modified_on = event.metadata.timestamp
+        self._aggregate_id = metadata.aggregate_id
+        self._aggregate_version = metadata.aggregate_version
+        self._aggregate_created_on = metadata.timestamp
+        self._aggregate_modified_on = metadata.timestamp
 
-        self._pending_events: List[DomainEvent] = list()
+        self._pending_events: List[DomainEvent] = list()  # TODO - should contain domain messages, not events
+        self._event_handler_map = dict()
+        self._register_event_handlers()
 
     @property
     def aggregate_created_on(self) -> datetime.datetime:
@@ -277,16 +288,26 @@ class Aggregate(ABC):
     def pending_events(self) -> Tuple[DomainEvent, ...]:
         return tuple(self._pending_events)
 
+    # TODO - document
+    def _register_event_handlers(self) -> None:
+        cls = type(self)
+        for name in dir(cls):
+            attr = getattr(cls, name)
+            event_type = getattr(attr, '_event_type', None)  # TODO - extract attribute name
+            if event_type is not None:
+                self._event_handler_map[event_type] = getattr(self, name)
+
     def apply_event(self, event: DomainEvent) -> None:
         """
         Reimplement to provide change of state of the aggregate when event occur.
         Each event must have the associated event handler.
         """
         event_routing = self.get_event_routing()
-        event_handler = event_routing.get(type(event))
-        if event_handler is not None:
-            event_handler(event)
+        handler = event_routing.get(type(event))
+        if handler is not None:
+            handler(event)
         else:
+            # TODO - raise EventHandlerNotFound instead
             raise NotImplementedError(
                 f'Failed to apply event {type(event)} "{event.metadata.event_id}" to aggregate "{self.get_aggregate_type()}" - "{self.aggregate_id}": '
                 f'no event handler provided for the event, please check `get_event_routing` method, it should contain '
