@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from datetime import date
 from uuid import uuid5, NAMESPACE_URL
 
-from bestagon.core.aggregate import Aggregate, DomainEvent, DomainEventMetadata, DomainEventContext
-from bestagon.core.exceptions import DomainException
+from bestagon.core.aggregate import Aggregate, event_handler
 from bestagon.core.mapper import register_aggregate_type, register_event_type
+from bestagon.core.message import DomainEventMetadata
 
 
 @register_aggregate_type()
@@ -35,8 +35,8 @@ class Bond(Aggregate):
     class Matured(Aggregate.Event):
         isin: str
 
-    def __init__(self, event: Issued):
-        super().__init__(event)
+    def __init__(self, event: Issued, metadata: DomainEventMetadata):
+        super().__init__(event, metadata)
 
         # It is a good practice to make attributes private to protect them from occasional change
         self._isin = event.isin
@@ -99,22 +99,13 @@ class Bond(Aggregate):
         return self._maturity_segment
 
     # Private methots, that start with `_when` are event handlers, they are responsible for changing the state of the aggregate
+    @event_handler(DaysToMaturityChanged)
     def _when_days_to_maturity_changed(self, event: DaysToMaturityChanged) -> None:
         self._days_to_maturity = event.new_days_to_maturity
 
+    @event_handler(Matured)
     def _when_matured(self, event: Matured) -> None:
         self._matured = True
-
-    def apply_event(self, event: DomainEvent) -> None:
-        event_routing = {
-            self.DaysToMaturityChanged: self._when_days_to_maturity_changed,
-            self.Matured: self._when_matured,
-        }
-        event_handler = event_routing.get(type(event))
-        if event_handler is not None:
-            event_handler(event)
-        else:
-            super().apply_event(event)
 
     @staticmethod
     def create_id(isin: str) -> str:
@@ -136,11 +127,9 @@ class Bond(Aggregate):
             coupon: float,
             coupon_frequency: int,
             day_count_convention: str,
-            context: DomainEventContext | None = None
     ) -> 'Bond':
         aggregate_id = cls.create_id(isin=isin)
         event = cls.Issued(
-            metadata=DomainEventMetadata.from_aggregate_class(cls, aggregate_id, context),
             isin=isin,
             issue_date=issue_date,
             maturity_date=maturity_date,
@@ -150,6 +139,7 @@ class Bond(Aggregate):
             coupon_frequency=coupon_frequency,
             day_count_convention=day_count_convention
         )
+        metadata = DomainEventMetadata.from_aggregate_class(cls, aggregate_id, context)
         obj = cls.create_aggregate(event)
         return obj
 

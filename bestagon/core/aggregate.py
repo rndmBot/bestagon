@@ -1,13 +1,10 @@
 import datetime
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict
-from typing import List, Tuple, Type, TYPE_CHECKING
-from uuid import uuid4
+from dataclasses import dataclass
+from typing import List, Tuple
 
 from bestagon.core.exceptions import BestagonError
-
-if TYPE_CHECKING:
-    from bestagon.core.message import Command
+from bestagon.core.message import DomainEvent, DomainEventMetadata
 
 
 class DomainException(BestagonError):
@@ -23,162 +20,13 @@ class AggregateVersionError(BestagonError):
     pass
 
 
-@dataclass(frozen=True)
-class DomainEventContext:
-    """
-    Contains the contextual data that can be propagated from one event to another.
-
-    :param event_id: ID of the event the context belongs to.
-    :param correlation_id: a unique identifier attached to a request that remains consistent as the request passes through multiple services.
-    :param trace_id: OpenTelemetry trace ID
-    :param span_id: OpenTelemetry span ID
-    """
-
-    event_id: str | None = None
-    correlation_id: str | None = None
-    trace_id: str | None = None
-    span_id: str | None = None
-
-    @classmethod
-    def from_command(cls, command: 'Command') -> 'DomainEventContext':
-        obj = cls(
-            event_id=command.metadata.causation_id,
-            correlation_id=command.metadata.correlation_id,
-            trace_id=command.metadata.trace_id,
-            span_id=command.metadata.span_id
-        )
-        return obj
-
-    @classmethod
-    def from_domain_event(cls, event: 'DomainEvent') -> 'DomainEventContext':
-        obj = cls(
-            event_id=event.metadata.event_id,
-            correlation_id=event.metadata.correlation_id,
-            trace_id=event.metadata.trace_id,
-            span_id=event.metadata.span_id
-        )
-        return obj
+class NoEventhandlerError(BestagonError):
+    """Raised if no event handler is registered for the event."""
+    pass
 
 
-@dataclass(frozen=True)
-class DomainEventMetadata:
-    """
-    Key domain event metadata. Contains all technical attributes of the event.
-
-    :param event_id: Unique identifier for this specific event instance
-    :param timestamp: ISO 8601 timestamp when the event was created
-    :param aggregate_id: ID of the aggregate the event belongs to
-    :param aggregate_version: version of the aggregate after creation of the event
-    :param aggregate_type: type of the aggregate event belongs to
-
-    :param correlation_id: a unique identifier attached to a request that remains consistent as the request passes through multiple services.
-    :param causation_id: ID of the event that triggered this one
-    :param trace_id: OpenTelemetry trace ID
-    :param span_id: OpenTelemetry span ID
-    """
-    event_id: str
-    timestamp: str
-    aggregate_id: str
-    aggregate_version: int
-    aggregate_type: str
-    # TODO - add event_type here???
-
-    # Tracing identifiers
-    correlation_id: str | None = None  # Groups related events from same user action
-    causation_id: str | None = None  # ID of the event that triggered this one
-    trace_id: str | None = None  # OpenTelemetry trace ID
-    span_id: str| None = None  # OpenTelemetry span ID
-
-    @staticmethod
-    def create_event_id() -> str:
-        return str(uuid4())
-
-    @staticmethod
-    def create_timestamp() -> str:
-        return datetime.datetime.now(datetime.UTC).isoformat()
-
-    @classmethod
-    def from_aggregate(cls, aggregate: 'Aggregate', context: DomainEventContext | None = None) -> 'DomainEventMetadata':
-        """
-        Convenience factory method to create metadata from aggregate instance.
-
-        :param aggregate: Aggregate class instance
-        :param context: Additional contextual information from the previous event
-        :return: DomainEventMetadata instance
-        """
-        obj = cls(
-            event_id=cls.create_event_id(),
-            timestamp=cls.create_timestamp(),
-            aggregate_id=aggregate.aggregate_id,
-            aggregate_version=aggregate.next_aggregate_version,
-            aggregate_type=aggregate.aggregate_type,
-
-            correlation_id=context.correlation_id if context is not None else None,
-            causation_id=context.event_id if context is not None else None,
-            trace_id=context.trace_id if context is not None else None,
-            span_id=context.span_id if context is not None else None
-        )
-        return obj
-
-    @classmethod
-    def from_aggregate_class(cls, aggregate_cls: Type['Aggregate'], aggregate_id: str, context: DomainEventContext | None = None) -> 'DomainEventMetadata':
-        """
-        Convenience factory method to create metadata from aggregate class. Can be used before the aggregate creation,
-        for example inside the aggregate's factory method.
-
-        :param aggregate_cls: Aggregate class
-        :param aggregate_id: before creation aggregate contain no aggregate_id, so it should be provided explicitly using this parameter.
-        :param context: Additional contextual information from the previous event
-        :return: DomainEventMetadata instance
-        """
-
-
-        obj = cls(
-            event_id=cls.create_event_id(),
-            timestamp=cls.create_timestamp(),
-            aggregate_id=aggregate_id,
-            aggregate_version=aggregate_cls.INITIAL_VERSION,
-            aggregate_type=aggregate_cls.get_aggregate_type(),
-
-            correlation_id=context.correlation_id if context is not None else None,
-            causation_id=context.event_id if context is not None else None,
-            trace_id=context.trace_id if context is not None else None,
-            span_id=context.span_id if context is not None else None
-        )
-        return obj
-
-    @classmethod
-    def from_dict(cls, data: dict) -> 'DomainEventMetadata':
-        obj = cls(**data)
-        return obj
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class DomainEvent:
-    """
-    Domain event represents an important change in a business domain that is meaningfull to business experts and stakeholders.
-    Domain event leads to the change in aggregate state and at the same time triggers a reaction in other parts of the system.
-
-    :param metadata: non business related data that is important in the context of specificdomain event.
-    """
-    metadata: DomainEventMetadata
-
-    def get_payload(self) -> dict:
-        """
-        Returns business related fields as a dictionary.
-        """
-        payload = asdict(self)
-        payload.pop('metadata')
-        return payload
-
-
-# TODO - define here, inside class or in separate module
 def event_handler(event_type):
     def decorator(func):
-        # TODO - name of the attribute can be extracted to variable
         setattr(func, '_event_type', event_type)
         return func
     return decorator
@@ -244,10 +92,6 @@ class Aggregate(ABC):
         pass
 
     def __init__(self, event: Created, metadata: DomainEventMetadata):
-        """
-        The emthod takes `Created` event as input aprameter and sets the initial state of the aggregate.
-        :param event:
-        """
         self._aggregate_id = metadata.aggregate_id
         self._aggregate_version = metadata.aggregate_version
         self._aggregate_created_on = metadata.timestamp
@@ -270,54 +114,47 @@ class Aggregate(ABC):
         return datetime.datetime.fromisoformat(self._aggregate_modified_on)
 
     @property
-    def aggregate_type(self) -> str:
-        return self.get_aggregate_type()
-
-    @property
     def aggregate_version(self) -> int:
         return self._aggregate_version
 
     @property
     def next_aggregate_version(self) -> int:
-        """
-        Convenience property to get the next version number of the aggregate
-        """
         return self.aggregate_version + 1
 
     @property
     def pending_events(self) -> Tuple[DomainEvent, ...]:
+        # TODO - should be pending messages
         return tuple(self._pending_events)
 
-    # TODO - document
     def _register_event_handlers(self) -> None:
+        # TODO - docstring
         cls = type(self)
         for name in dir(cls):
             attr = getattr(cls, name)
-            event_type = getattr(attr, '_event_type', None)  # TODO - extract attribute name
+            event_type = getattr(attr, '_event_type', None)
             if event_type is not None:
                 self._event_handler_map[event_type] = getattr(self, name)
 
     def apply_event(self, event: DomainEvent) -> None:
-        """
-        Reimplement to provide change of state of the aggregate when event occur.
-        Each event must have the associated event handler.
-        """
+        # TODO - docstring
         handler = self._event_handler_map.get(type(event))
         if handler is not None:
             handler(event)
         else:
-            # TODO - raise EventHandlerNotFound instead
-            raise NotImplementedError(
-                f'Failed to apply event {type(event)} "{event.metadata.event_id}" to aggregate "{self.get_aggregate_type()}" - "{self.aggregate_id}": '
+            # TODO - rewrite error message, mention to decorate handlers with "@event_handler"
+            raise NoEventhandlerError(
+                f'Failed to apply event {type(event)} to aggregate "{self.get_aggregate_type()}" - "{self.aggregate_id}": '
                 f'no event handler provided for the event, please check `get_event_routing` method, it should contain '
                 f'the routing to valid event handler, for example {{self.CustomerCreated: self._when_customer_created}}'
             )
 
     def clear_events(self) -> None:
+        # TODO - should be clear_messages
         """Clears all pending events on the Aggregate"""
         self._pending_events = list()
 
     def collect_events(self) -> List[DomainEvent]:
+        # TODO - should be collect_messages
         """Returns the list of pending events in the aggregate and clears pending events"""
         events = self._pending_events
         self.clear_events()
@@ -345,16 +182,7 @@ class Aggregate(ABC):
         """
         raise NotImplementedError
 
-    @staticmethod
-    @abstractmethod
-    def get_aggregate_type() -> str:
-        """
-        Aggregate type should be defined during modelling stage and MUST NOT BE CHANGED during the entire aggregate lifecycle.
-        It is used by repository to retreive specific aggregate instances and by event store as prefix to event stream.
-        """
-        raise NotImplementedError
-
-    def mutate(self, event: DomainEvent) -> None:
+    def mutate(self, event: DomainEvent, metadata: DomainEventMetadata) -> None:
         """
         The method takes a DomainEvent as an input and changes the aggregate state by applying the event.
         This method is used in two scenarios:
@@ -362,30 +190,30 @@ class Aggregate(ABC):
         2. Explicitly when reconstructing the aggregate from events.
         """
         # Event MUST belong to the aggregate
-        if self.aggregate_id != event.metadata.aggregate_id:
+        if self.aggregate_id != metadata.aggregate_id:
             raise AggregateIDMismatch(
                 f'Failed t mutate aggregate "{self.aggregate_type}" {self.aggregate_id}: '
-                f'aggregate_id of the event {event.metadata.event_id} does not match ID of the aggregate - {event.metadata.aggregate_id}. '
+                f'aggregate_id of the event {metadata.event_id} does not match ID of the aggregate - {metadata.aggregate_id}. '
             )
         # Version of the new event MUST BE EXACTLY ONE MORE than the current aggegate version
-        if (event.metadata.aggregate_version - self.aggregate_version) != 1:
+        if (metadata.aggregate_version - self.aggregate_version) != 1:
             raise AggregateVersionError(
                 f'Failed to mutate aggregate "{self.aggregate_type}" {self.aggregate_id}: '
                 f'the version of the passed event must be exactly 1 more than the current version of the aggregate. '
-                f'Current verion: {self.aggregate_version}, event version: {event.metadata.aggregate_version}. '
+                f'Current verion: {self.aggregate_version}, event version: {metadata.aggregate_version}. '
             )
 
         # Change the state of Aggregate
         self.apply_event(event)
 
         # Record new version and modification date
-        self._aggregate_version = event.metadata.aggregate_version
-        self._aggregate_modified_on = event.metadata.timestamp
+        self._aggregate_version = metadata.aggregate_version
+        self._aggregate_modified_on = metadata.timestamp
 
-    def trigger_event(self, event: Event) -> None:
+    def trigger_event(self, event: Event, metadata: DomainEventMetadata) -> None:
         """
         Should be called whenever new event occur during aggregate lifecycle.
         Mutates aggregate state and adds event to the list of pending events
         """
-        self.mutate(event)
+        self.mutate(event=event, metadata=metadata)
         self._pending_events.append(event)

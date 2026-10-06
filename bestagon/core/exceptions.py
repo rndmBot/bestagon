@@ -10,5 +10,3 @@ class TypeNotRegisteredError(BestagonError):
     pass
 
 
-class TypeAlreadyRegisteredError(BestagonError):
-    pass

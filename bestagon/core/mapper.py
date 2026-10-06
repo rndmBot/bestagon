@@ -1,11 +1,10 @@
-import inspect
 import json
 from collections import defaultdict
 from typing import Type, Dict, Callable, List
 
-from bestagon.core.aggregate import Aggregate, DomainEvent, DomainEventMetadata
+from bestagon.core.aggregate import DomainEvent, DomainEventMetadata
 from bestagon.core.event_store import EventStoreEvent, NewEventStoreEvent
-from bestagon.core.exceptions import TypeNotRegisteredError, TypeAlreadyRegisteredError, HandlerAlreadyRegistered
+from bestagon.core.exceptions import TypeNotRegisteredError, HandlerAlreadyRegistered
 from bestagon.core.message import Query, Command
 
 
@@ -17,18 +16,11 @@ class Mapper:
     """
 
     def __init__(self):
-        self._aggregate_class_map: Dict[str, Type[Aggregate]] = dict()
-
         self._event_class_map: Dict[str, Type[DomainEvent]] = dict()
         self._event_type_map: Dict[Type[DomainEvent], List[str]] = defaultdict(list)
 
         self._query_handler_map: Dict[Type[Query], Callable] = dict()
         self._command_handler_map: Dict[Type[Command], Callable] = dict()
-
-    def get_aggregate_class(self, aggregate_type: str) -> Type[Aggregate]:
-        if aggregate_type in self._aggregate_class_map:
-            return self._aggregate_class_map[aggregate_type]
-        raise TypeNotRegisteredError(f'No aggregate class registered for aggregate type: {aggregate_type}')
 
     def get_command_handler(self, command_type: Type[Command]) -> Callable:
         if command_type not in self._command_handler_map:
@@ -53,16 +45,6 @@ class Mapper:
         if query_type not in self._query_handler_map:
             raise TypeNotRegisteredError(f'No query handler registered for query {query_type}')
         return self._query_handler_map[query_type]
-
-    def register_aggregate_type(self, aggregate_class: Type[Aggregate], aggregate_type: str) -> None:
-        if not issubclass(aggregate_class, Aggregate):
-            raise TypeError(f'Invalid aggregate class type, expected <Aggregate>, got {aggregate_class}')
-        if not isinstance(aggregate_type, str):
-            raise TypeError('Aggregate class should be string')
-
-        if aggregate_type in self._aggregate_class_map:
-            raise TypeAlreadyRegisteredError(f'Type {aggregate_type} already registered for aggregate class {self._aggregate_class_map[aggregate_type]}')
-        self._aggregate_class_map[aggregate_type] = aggregate_class
 
     def register_event_type(self, event_class: Type[DomainEvent], event_type: str) -> None:
         if not issubclass(event_class, DomainEvent):
@@ -113,27 +95,3 @@ class Mapper:
 
 # TODO - to many modules depend on this class, how to reduce this dependncy?
 mapper = Mapper()
-
-
-def _extract_type(fn: Callable) -> Type:
-    signature = inspect.signature(fn)
-    params = list(signature.parameters.values())
-    if params:
-        extracted_type = params[-1].annotation
-        return extracted_type
-    else:
-        raise ValueError('No parameters found in signature')
-
-
-def register_aggregate_type():
-    def decorator(cls: Type[Aggregate]) -> Type[Aggregate]:
-        mapper.register_aggregate_type(aggregate_class=cls, aggregate_type=cls.get_aggregate_type())
-        return cls
-    return decorator
-
-
-def register_event_type(event_type: str):
-    def decorator(cls: Type[DomainEvent]) -> Type[DomainEvent]:
-        mapper.register_event_type(event_class=cls, event_type=event_type)
-        return cls
-    return decorator
