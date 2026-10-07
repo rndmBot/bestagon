@@ -28,6 +28,7 @@ class AggregateTypeRegistry:
     # TODO - docs
     def __init__(self):
         self._aggregate_class_map: Dict[str, Type[Aggregate]] = dict()
+        self._aggregate_type_map: Dict[Type[Aggregate], List[str]] = defaultdict(list)
 
     def get_aggregate_class(self, aggregate_type: str) -> Type[Aggregate]:
         if aggregate_type in self._aggregate_class_map:
@@ -36,6 +37,15 @@ class AggregateTypeRegistry:
             f'Failed to retrieve aggregate class for aggregate type {aggregate_type}: '
             f'the aggregate type is not registered.'
         )
+
+    def get_aggregate_types(self, aggregate_class: Type[Aggregate]) -> List[str]:
+        aggregate_types = self._aggregate_type_map.get(aggregate_class)
+        if not aggregate_types:
+            raise AggregateTypeNotRegisteredError(
+                f'Fialed to retrieve aggregate types for aggregate class {aggregate_class.__class__.__qualname__}: '
+                f'no aggregate types registered for the aggregate'
+            )
+        return aggregate_types
 
     def register_aggregate_type(self, aggregate_type: str, aggregate_class: Type[Aggregate]) -> None:
         if not issubclass(aggregate_class, Aggregate):
@@ -59,6 +69,7 @@ class AggregateTypeRegistry:
             )
 
         self._aggregate_class_map[aggregate_type] = aggregate_class
+        self._aggregate_type_map[aggregate_class].append(aggregate_type)
 
 
 class EventTypeRegistry:

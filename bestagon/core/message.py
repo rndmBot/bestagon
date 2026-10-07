@@ -1,6 +1,8 @@
-import datetime
+import json
 from dataclasses import dataclass, asdict
-from uuid import uuid4
+
+from bestagon.core.event_store import NewEventStoreEvent, EventStoreEvent
+from bestagon.core.registry import event_type_registry
 
 
 @dataclass(frozen=True)
@@ -9,7 +11,9 @@ class DomainEvent:
     Domain event represents an important change in a business domain that is meaningfull to business experts and stakeholders.
     Domain event leads to the change in aggregate state and at the same time triggers a reaction in other parts of the system.
     """
-    pass
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 @dataclass
@@ -36,15 +40,6 @@ class DomainEventMetadata:
     # Tracing identifiers
     correlation_id: str
     causation_id: str
-
-    @staticmethod
-    def create_event_id() -> str:
-        return str(uuid4())
-
-    @staticmethod
-    def create_timestamp() -> str:
-        return datetime.datetime.now(datetime.UTC).isoformat()
-
 
     @classmethod
     def from_dict(cls, data: dict) -> 'DomainEventMetadata':
@@ -95,6 +90,31 @@ class Message:
 class DomainMessage(Message):
     event: DomainEvent
     metadata: DomainEventMetadata
+
+    @classmethod
+    def from_event_store_event(cls, event_store_event: EventStoreEvent) -> 'DomainMessage':
+        event_class = event_type_registry.get_event_class(event_store_event.event_type)
+        metadata_dict = json.loads(event_store_event.metadata.decode())
+        metadata = DomainEventMetadata.from_dict(metadata_dict)
+        payload_dict = json.loads(event_store_event.payload.decode())
+        domain_event = event_class(metadata=metadata, **payload_dict)
+
+        message = cls(
+            event=domain_event,
+            metadata=metadata
+        )
+        return message
+
+    def to_new_event_store_event(self) -> NewEventStoreEvent:
+        payload = json.dumps(self.event.to_dict()).encode()
+        metadata = json.dumps(self.metadata.to_dict()).encode()
+
+        new_stream_event = NewEventStoreEvent(
+            event_type=self.metadata.event_type,
+            payload=payload,
+            metadata=metadata
+        )
+        return new_stream_event
 
 
 @dataclass(frozen=True)

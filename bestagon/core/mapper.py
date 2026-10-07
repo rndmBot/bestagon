@@ -1,19 +1,13 @@
 import json
 from typing import Type, Dict, Callable
 
-from bestagon.core.aggregate import DomainEvent, DomainEventMetadata
 from bestagon.core.event_store import EventStoreEvent, NewEventStoreEvent
 from bestagon.core.exceptions import TypeNotRegisteredError, HandlerAlreadyRegistered
-from bestagon.core.message import Query, Command
+from bestagon.core.message import Query, Command, DomainMessage
+from bestagon.core.registry import event_type_registry
 
 
 class Mapper:
-    """
-    There can be multiple event types for a single event. This feature is added to fix the situation when there are several event types in event store
-    for the same event because of technical error or mistake, in such case the event can be successfully reconstructed.
-    When event with multiple types is serialized, the first registered type will be used as an event type.
-    """
-
     def __init__(self):
         self._query_handler_map: Dict[Type[Query], Callable] = dict()
         self._command_handler_map: Dict[Type[Command], Callable] = dict()
@@ -51,18 +45,4 @@ class Mapper:
         domain_event = event_class(metadata=metadata, **payload_dict)
         return domain_event
 
-    def to_new_event_store_event(self, domain_event: DomainEvent) -> NewEventStoreEvent:
-        event_type = self.get_event_type(type(domain_event))
-        payload = json.dumps(domain_event.get_payload()).encode()
-        metadata = json.dumps(domain_event.metadata.to_dict()).encode()
 
-        new_stream_event = NewEventStoreEvent(
-            event_type=event_type,
-            payload=payload,
-            metadata=metadata
-        )
-        return new_stream_event
-
-
-# TODO - to many modules depend on this class, how to reduce this dependncy?
-mapper = Mapper()
