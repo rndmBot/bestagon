@@ -2,12 +2,17 @@ from dataclasses import dataclass
 from datetime import date
 from uuid import uuid5, NAMESPACE_URL
 
-from bestagon.core.aggregate import Aggregate, event_handler
-from bestagon.core.mapper import register_aggregate_type, register_event_type
-from bestagon.core.message import DomainEventMetadata
+from bestagon.core.aggregate import Aggregate, event_handler, command_handler, DomainException
+from bestagon.core.message import DomainEventMetadata, CommandMetadata, Command
+from bestagon.core.registry import register_aggregate_type, register_event_type
 
 
-@register_aggregate_type()
+@dataclass(frozen=True)
+class SetBondMatured(Command):
+    isin: str
+
+
+@register_aggregate_type('bond')
 class Bond(Aggregate):
 
     # Events are defined as nested classes to keep things in order
@@ -143,7 +148,8 @@ class Bond(Aggregate):
         obj = cls.create_aggregate(event)
         return obj
 
-    def set_matured(self, context: DomainEventContext | None = None) -> None:
+    @command_handler
+    def set_matured(self, command: SetBondMatured, metadata: CommandMetadata):
         if self.matured:
             return
 
@@ -151,10 +157,9 @@ class Bond(Aggregate):
             raise DomainException('Only bonds with days to maturity of 0 can be matured')
 
         event = self.Matured(
-            metadata=DomainEventMetadata.from_aggregate(self, context),
             isin=str(self.isin)
         )
-        self.trigger_event(event)
+        return event
 
     def update_days_to_maturity(self, context: DomainEventContext) -> None:
         if self.matured:

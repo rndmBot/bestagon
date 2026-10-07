@@ -1,6 +1,5 @@
 import json
-from collections import defaultdict
-from typing import Type, Dict, Callable, List
+from typing import Type, Dict, Callable
 
 from bestagon.core.aggregate import DomainEvent, DomainEventMetadata
 from bestagon.core.event_store import EventStoreEvent, NewEventStoreEvent
@@ -16,9 +15,6 @@ class Mapper:
     """
 
     def __init__(self):
-        self._event_class_map: Dict[str, Type[DomainEvent]] = dict()
-        self._event_type_map: Dict[Type[DomainEvent], List[str]] = defaultdict(list)
-
         self._query_handler_map: Dict[Type[Query], Callable] = dict()
         self._command_handler_map: Dict[Type[Command], Callable] = dict()
 
@@ -27,35 +23,10 @@ class Mapper:
             raise TypeNotRegisteredError(f'No command handler registered for command {command_type}')
         return self._command_handler_map[command_type]
 
-    def get_event_class(self, event_type: str) -> Type[DomainEvent]:
-        if event_type in self._event_class_map:
-            return self._event_class_map[event_type]
-        raise TypeNotRegisteredError(f'No event class registered for event type: {event_type}')
-
-    def get_event_type(self, event_class: Type[DomainEvent]) -> str:
-        return self.get_event_types(event_class)[0]
-
-    def get_event_types(self, event_class: Type[DomainEvent]) -> List[str]:
-        event_types = self._event_type_map.get(event_class)
-        if not event_types:
-            raise TypeNotRegisteredError(f'No event types registered for event {event_class}')
-        return event_types
-
     def get_query_handler(self, query_type: Type[Query]) -> Callable:
         if query_type not in self._query_handler_map:
             raise TypeNotRegisteredError(f'No query handler registered for query {query_type}')
         return self._query_handler_map[query_type]
-
-    def register_event_type(self, event_class: Type[DomainEvent], event_type: str) -> None:
-        if not issubclass(event_class, DomainEvent):
-            raise TypeError(f'Invalid event class type, expected <DomainEvent>, got {event_class}')
-        if not isinstance(event_type, str):
-            raise TypeError('Event type should be string')
-
-        if event_type in self._event_class_map:
-            raise TypeAlreadyRegisteredError(f'Type {event_type} already registered for event {self._event_class_map[event_type]}')
-        self._event_class_map[event_type] = event_class
-        self._event_type_map[event_class].append(event_type)
 
     def register_command_handler(self, command_type: Type[Command], handler: Callable) -> None:
         if command_type in self._command_handler_map:

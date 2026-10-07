@@ -1,12 +1,9 @@
-import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Tuple
-from uuid import uuid4
 
 from bestagon.core.exceptions import BestagonError
-from bestagon.core.message import DomainEvent, DomainEventMetadata, Command, CommandMetadata, DomainMessage
-from bestagon.core.registry import event_type_registry, aggregate_type_registry
+from bestagon.core.message import DomainEvent
 
 
 class DomainException(BestagonError):
@@ -25,25 +22,6 @@ class AggregateVersionError(BestagonError):
 class NoEventhandlerError(BestagonError):
     """Raised if no event handler is registered for the event."""
     pass
-
-
-def command_handler(func):
-    def wrapper(self: 'Aggregate', command: Command, metadata: CommandMetadata):
-        # TODO - validate input
-        event: 'Aggregate.Event' = func(self, command=command, metadata=metadata)
-        domain_event_metadata = DomainEventMetadata(
-            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
-            event_id=str(uuid4()),
-            event_type=event_type_registry.get_event_types(type(event))[0],  # TODO - ORLY???
-            aggregate_id=self.aggregate_id,
-            aggregate_version=self.next_aggregate_version,
-            aggregate_type=aggregate_type_registry.get_aggregate_type(type(self)),
-
-            correlation_id=metadata.correlation_id,
-            causation_id=metadata.command_id
-        )
-        message = DomainMessage(event=event, metadata=domain_event_metadata)
-        self.trigger_message(message=message)
 
 
 def event_handler(event_type):
@@ -112,39 +90,24 @@ class Aggregate(ABC):
         """
         pass
 
-    def __init__(self, event: Created, metadata: DomainEventMetadata):
-        self._aggregate_id = metadata.aggregate_id
-        self._aggregate_version = metadata.aggregate_version
-        self._aggregate_created_on = metadata.timestamp
-        self._aggregate_modified_on = metadata.timestamp
+    def __init__(self, event: Created, aggregate_id: str, aggregate_version: int):
+        self._aggregate_id = aggregate_id
+        self._aggregate_version = aggregate_version
 
-        self._pending_events: List[DomainEvent] = list()  # TODO - should contain domain messages, not events
+        self._pending_events: List[DomainEvent] = list()
         self._event_handler_map = dict()
         self._register_event_handlers()
-
-    @property
-    def aggregate_created_on(self) -> datetime.datetime:
-        return datetime.datetime.fromisoformat(self._aggregate_created_on)
 
     @property
     def aggregate_id(self) -> str:
         return self._aggregate_id
 
     @property
-    def aggregate_modified_on(self) -> datetime.datetime:
-        return datetime.datetime.fromisoformat(self._aggregate_modified_on)
-
-    @property
     def aggregate_version(self) -> int:
         return self._aggregate_version
 
     @property
-    def next_aggregate_version(self) -> int:
-        return self.aggregate_version + 1
-
-    @property
     def pending_events(self) -> Tuple[DomainEvent, ...]:
-        # TODO - should be pending messages
         return tuple(self._pending_events)
 
     def _register_event_handlers(self) -> None:
@@ -164,33 +127,26 @@ class Aggregate(ABC):
         else:
             # TODO - rewrite error message, mention to decorate handlers with "@event_handler"
             raise NoEventhandlerError(
-                f'Failed to apply event {type(event)} to aggregate "{self.get_aggregate_type()}" - "{self.aggregate_id}": '
+                f'Failed to apply event {type(event)} to aggregate "{self.__class__.__qualname__}" - "{self.aggregate_id}": '
                 f'no event handler provided for the event, please check `get_event_routing` method, it should contain '
                 f'the routing to valid event handler, for example {{self.CustomerCreated: self._when_customer_created}}'
             )
 
-    def clear_events(self) -> None:
-        # TODO - should be clear_messages
+    def clear_pending_events(self) -> None:
         """Clears all pending events on the Aggregate"""
-        self._pending_events = list()
-
-    def collect_events(self) -> List[DomainEvent]:
-        # TODO - should be collect_messages
-        """Returns the list of pending events in the aggregate and clears pending events"""
-        events = self._pending_events
-        self.clear_events()
-        return events
+        self._pending_events.clear()
 
     @classmethod
-    def create_aggregate(cls, event: 'Created', metadata: DomainEventMetadata) -> 'Aggregate':
+    def create_aggregate(cls, event: 'Created', aggregate_id: str, aggregate_version: int) -> 'Aggregate':
         """Actually creates new aggregate. Should be used by factory method implemented on specific aggregate instance."""
-        if event.metadata.aggregate_version != cls.INITIAL_VERSION:
+        # TODO - validate that the event is "Created" class
+        if aggregate_version != cls.INITIAL_VERSION:
             raise AggregateVersionError(
-                f'Failed to create aggregate "{event.metadata.aggregate_type}" - '
-                f'expected aggregate version {cls.INITIAL_VERSION}, got {event.metadata.aggregate_version}'
+                f'Failed to create aggregate "{cls.__class__.__qualname__}" - '
+                f'expected aggregate version {cls.INITIAL_VERSION}, got {aggregate_version}'
             )
 
-        obj = cls(event=event, metadata=metadata)
+        obj = cls(event=event, aggregate_id=aggregate_id, aggregate_version=aggregate_version)
         obj._pending_events.append(event)
         return obj
 
@@ -203,38 +159,10 @@ class Aggregate(ABC):
         """
         raise NotImplementedError
 
-    def mutate(self, event: DomainEvent, metadata: DomainEventMetadata) -> None:
-        """
-        The method takes a DomainEvent as an input and changes the aggregate state by applying the event.
-        This method is used in two scenarios:
-        1. Implicitly when calling `trigger_event` method when triggering newly created events.
-        2. Explicitly when reconstructing the aggregate from events.
-        """
-        # Event MUST belong to the aggregate
-        if self.aggregate_id != metadata.aggregate_id:
-            raise AggregateIDMismatch(
-                f'Failed t mutate aggregate "{self.aggregate_type}" {self.aggregate_id}: '
-                f'aggregate_id of the event {metadata.event_id} does not match ID of the aggregate - {metadata.aggregate_id}. '
-            )
-        # Version of the new event MUST BE EXACTLY ONE MORE than the current aggegate version
-        if (metadata.aggregate_version - self.aggregate_version) != 1:
-            raise AggregateVersionError(
-                f'Failed to mutate aggregate "{self.aggregate_type}" {self.aggregate_id}: '
-                f'the version of the passed event must be exactly 1 more than the current version of the aggregate. '
-                f'Current verion: {self.aggregate_version}, event version: {metadata.aggregate_version}. '
-            )
-
-        # Change the state of Aggregate
+    def mutate(self, event: DomainEvent) -> None:
         self.apply_event(event)
+        self._aggregate_version = self.aggregate_version + 1
 
-        # Record new version and modification date
-        self._aggregate_version = metadata.aggregate_version
-        self._aggregate_modified_on = metadata.timestamp
-
-    def trigger_event(self, event: Event, metadata: DomainEventMetadata) -> None:
-        """
-        Should be called whenever new event occur during aggregate lifecycle.
-        Mutates aggregate state and adds event to the list of pending events
-        """
-        self.mutate(event=event, metadata=metadata)
+    def trigger_event(self, event: DomainEvent) -> None:
+        self.mutate(event=event)
         self._pending_events.append(event)
