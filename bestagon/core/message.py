@@ -76,8 +76,8 @@ class CommandMetadata:
     command_type: str
 
     # Tracing identifiers
-    correlation_id: str | None = None
-    causation_id: str | None = None
+    correlation_id: str
+    causation_id: str
 
 
 @dataclass(frozen=True)

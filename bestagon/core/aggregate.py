@@ -2,9 +2,11 @@ import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Tuple
+from uuid import uuid4
 
 from bestagon.core.exceptions import BestagonError
-from bestagon.core.message import DomainEvent, DomainEventMetadata
+from bestagon.core.message import DomainEvent, DomainEventMetadata, Command, CommandMetadata, DomainMessage
+from bestagon.core.registry import event_type_registry, aggregate_type_registry
 
 
 class DomainException(BestagonError):
@@ -23,6 +25,25 @@ class AggregateVersionError(BestagonError):
 class NoEventhandlerError(BestagonError):
     """Raised if no event handler is registered for the event."""
     pass
+
+
+def command_handler(func):
+    def wrapper(self: 'Aggregate', command: Command, metadata: CommandMetadata):
+        # TODO - validate input
+        event: 'Aggregate.Event' = func(self, command=command, metadata=metadata)
+        domain_event_metadata = DomainEventMetadata(
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
+            event_id=str(uuid4()),
+            event_type=event_type_registry.get_event_types(type(event))[0],  # TODO - ORLY???
+            aggregate_id=self.aggregate_id,
+            aggregate_version=self.next_aggregate_version,
+            aggregate_type=aggregate_type_registry.get_aggregate_type(type(self)),
+
+            correlation_id=metadata.correlation_id,
+            causation_id=metadata.command_id
+        )
+        message = DomainMessage(event=event, metadata=domain_event_metadata)
+        self.trigger_message(message=message)
 
 
 def event_handler(event_type):
