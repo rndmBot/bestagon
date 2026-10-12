@@ -22,10 +22,10 @@ One of the most important parts of the aggregate is domain events, and it is rec
 definition of events. It is a good practice to add them to the body of the aggregate because it will help to keep things
 in order, especially when you have a rich domain model with many aggregates and events.
 
-There are two types of domain events - `Aggregate.Created` and `Aggregate.Event`. They are both frozen data classes and
+There are two types of domain events - `Aggregate.AggregateCreated` and `Aggregate.AggrgateEvent`. They are both frozen data classes and
 contain only python primitives like str, int, float, bool etc. It must never contain mutable types or value objects,
-because it will make event mutable. Your aggregate always starts its lifecycle with `Aggregate.Created` event, every
-other consequtive event should inherit `Aggregate.Event` class.
+because it will make event mutable. Your aggregate always starts its lifecycle with `Aggregate.AggregateCreated` event, every
+other consequtive event should inherit `Aggregate.AggrgateEvent` class.
 
 .. code-block:: python
 
@@ -34,7 +34,7 @@ other consequtive event should inherit `Aggregate.Event` class.
 
         @dataclass(frozen=True)
         @register_event_type('BondIssued')
-        class Issued(Aggregate.Created):
+        class Issued(Aggregate.AggregateCreated):
             isin: str
             issue_date: str
             maturity_date: str
@@ -42,14 +42,14 @@ other consequtive event should inherit `Aggregate.Event` class.
 
         @dataclass(frozen=True)
         @register_event_type('BondTTMChanged')
-        class TermToMaturityChanged(Aggregate.Event):
+        class TermToMaturityChanged(Aggregate.AggrgateEvent):
             isin: str
             old_ttm: int
             new_ttm: int
 
         @dataclass(frozen=True)
         @register_event_type('BondMatured')
-        class Matured(Aggregate.Event):
+        class Matured(Aggregate.AggrgateEvent):
             isin: str
 
 
@@ -78,7 +78,7 @@ Initialization of the aggregate
 
 When you have finished with your events, it is time to define `__init__` method for your aggregate. Constructor takes
 only one parameter - an event from which an aggregate starts its lifecycle, and it must be a subclass of
-`Aggregate.Created` class. Here you define properties of your aggregate that can be changed within the aggregate
+`Aggregate.AggregateCreated` class. Here you define properties of your aggregate that can be changed within the aggregate
 lifecycle. To simplify the example here, we use primitives as property types, but it is highly advisable to use value
 objects here, especially if these properties are a part of your invariants:
 
@@ -136,7 +136,7 @@ the bond is `Issued`, so there should be a factory method named `issue` inside t
             aggregate_type=cls.get_aggregate_type()
         )
 
-        # Create event that should be a subclass of `Aggregate.Created` class
+        # Create event that should be a subclass of `Aggregate.AggregateCreated` class
         event = cls.Issued(
             metadata=metadata,
             isin=command.isin,
@@ -195,7 +195,7 @@ There are two types of method worth mentioning - comand handlers and event handl
 Command handlers are public methods that receive a command, execute business logic and trigger a corresponding event
 without changing the aggregate state.
 
-Event handlers are usually private methods that do not contain business logic. They receive an event as a parameter and
+AggrgateEvent handlers are usually private methods that do not contain business logic. They receive an event as a parameter and
 change the aggregate state. **IMPORTANT** - your event handlers **must not contain any business logic**, it should be
 implemented inside command handlers.
 
@@ -216,7 +216,7 @@ Let's learn it by example. Here we have a simple invariant - a bond is matured w
             aggregate_type=self.aggregate_type,
         )
 
-        # Event captures what have happened
+        # AggrgateEvent captures what have happened
         event = self.Matured(
             metadata=metadata,
             isin=self.isin

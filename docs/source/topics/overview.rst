@@ -32,7 +32,7 @@ sequence of all business events that happened in your domain, so called source o
     :align: center
 
 
-Event-sourced application
+AggrgateEvent-sourced application
 -------------------------
 
 The aggregates by themselves does not provide any mechanism for communication
@@ -85,10 +85,10 @@ it is always can be rebuilt from events.
     :align: center
 
 
-Event-Sourced System
+AggrgateEvent-Sourced System
 --------------------
 
-The next important component is an Event-Sourced System. The Domain Model, Applications and Projections form the core
+The next important component is an AggrgateEvent-Sourced System. The Domain Model, Applications and Projections form the core
 of your system. This core should not be properly configured and hidden from the outside world.
 `EventSourcedSystem` is designed for this purpose and it fullfils two important functions:
 

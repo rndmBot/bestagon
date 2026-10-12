@@ -7,10 +7,15 @@ from typing import Union, Dict, Type, Callable
 from bestagon.core.aggregate import DomainEvent
 from bestagon.core.checkpoint_store import CheckpointStore, Checkpoint
 from bestagon.core.event_store import EventStoreSubscription, EventStore
-from bestagon.core.mapper import mapper
+from bestagon.core.mapper import to_domain_message
+from bestagon.core.message import DomainMessage
+from bestagon.core.registry import event_type_registry
 from bestagon.core.repository import EventSourcedRepository
 
 logger = logging.getLogger(__name__)
+
+
+# TODO - TOP PRIORITY - the event processor if fragile, the entire module should be reviewed and refactored
 
 
 class EventProcessor(ABC):
@@ -48,32 +53,35 @@ class EventProcessor(ABC):
     def get_subscription_name(self) -> str:
         return f'{self.get_name()}_subscription'
 
-    async def process_event(self, event: DomainEvent) -> None:
+    async def process_domain_message(self, domain_message: DomainMessage) -> None:
         routing = self.get_event_routing()
         if not routing:
             logger.warning(f'Empty event routing for event_processor {self.name}')
-        handler = routing.get(type(event))
+        handler = routing.get(type(domain_message.event))
         if handler is not None:
-            await handler(event)
+            await handler(domain_message)
 
     async def _consume_subscription(self) -> None:
         while self.subscription.is_running():
             try:
-                stream_event = await self.subscription.next_event()
-                domain_event = mapper.to_domain_event(stream_event)
+                event_store_event = await self.subscription.next_event()
+                domain_message = to_domain_message(event_store_event=event_store_event)
                 checkpoint = Checkpoint(
                     name=self.get_checkpoint_name(),
-                    value=stream_event.commit_position
+                    value=event_store_event.commit_position
                 )
 
-                # TODO - ACHTUNG - dangerous, what if only one operation will be completed??? Should be executed in a single transaction (how??? there are no Trasactions in event sourcing)
-                # TODO - on exception system should be stoped
-                await self.process_event(event=domain_event)
+                # ------------------------------ #
+                # TODO - ACHTUNG - dangerous, what if only one operation will be completed???
+                #  Should be executed in a single transaction (how??? there are no Trasactions in event sourcing)
+                await self.process_domain_message(domain_message=domain_message)
                 await self.checkpoint_store.set_checkpoint(checkpoint)
+                # ------------------------------ #
             except StopAsyncIteration:
                 logger.debug(f'Subscription {self.subscription.name} stopped.')
                 break
             except Exception as e:
+                # TODO - ACHTUNG - the event processor is silently stopped on exception, there should be another way to handle exceptions
                 logger.warning(f'ACHTUNG - event processor {self.name} critically failed:')
                 logger.exception(e)
                 await self.subscription.stop()
@@ -101,16 +109,16 @@ class EventProcessor(ABC):
 
     async def subscribe_to(self, event_store: EventStore) -> None:
         if self.subscription is not None:
-            logger.info(f'Event processor {self.name} already have a running subscription.')
+            logger.info(f'AggrgateEvent processor {self.name} already have a running subscription.')
             return
 
         event_types = list()
         for event_class in self.get_event_routing().keys():
-            types = mapper.get_event_types(event_class)
+            types = event_type_registry.get_event_types(event_class)
             event_types.extend(types)
 
         if not event_types:
-            logger.warning(f'Subscription cancelled. Event processor {self.name} have no declared events to listen to.')
+            logger.warning(f'Subscription cancelled. AggrgateEvent processor {self.name} have no declared events to listen to.')
             return
 
         subscription_name = self.get_subscription_name()
@@ -123,7 +131,7 @@ class EventProcessor(ABC):
 
         self._subscription = subscription
         self._subscription_task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
-        logger.info(f'Event processor {self.name} subscribed to event store.')
+        logger.info(f'AggrgateEvent processor {self.name} subscribed to event store.')
 
 
 class Application(EventProcessor):

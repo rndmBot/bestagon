@@ -1,8 +1,5 @@
-import json
 from dataclasses import dataclass, asdict
-
-from bestagon.core.event_store import NewEventStoreEvent, EventStoreEvent
-from bestagon.core.registry import event_type_registry
+from bestagon.core.exceptions import EventTypeNotRegisteredError
 
 
 @dataclass(frozen=True)
@@ -12,11 +9,26 @@ class DomainEvent:
     Domain event leads to the change in aggregate state and at the same time triggers a reaction in other parts of the system.
     """
 
+    _EVENT_TYPE = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls._EVENT_TYPE = None
+
+    @property
+    def event_type(self) -> str:
+        if not self._EVENT_TYPE:
+            raise EventTypeNotRegisteredError(
+                f'Failed to retrieve event type for event {self.__class__.__qualname__}: event type is not registered, '
+                f'use `@register_event_type(event_type: str)` decorator on event class to register event type.'
+            )
+        return self._EVENT_TYPE
+
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-@dataclass
+@dataclass(frozen=True)
 class DomainEventMetadata:
     """
     Key domain event metadata. Contains all technical attributes of the event.
@@ -30,6 +42,10 @@ class DomainEventMetadata:
     :param correlation_id: a unique identifier attached to a request that remains consistent as the request passes through multiple services.
     :param causation_id: ID of the event that triggered this one
     """
+
+    # TODO - include metadata version
+    # TODO - TOP PRIORITY - implement separate MetadataFactory class which should be responsible for metadata creation, serialization and deserialization
+
     timestamp: str
     event_id: str
     event_type: str
@@ -82,6 +98,12 @@ class Query:
 
 
 @dataclass(frozen=True)
+class TracingMetadata:
+    correlation_id: str
+    causation_id: str
+
+
+@dataclass(frozen=True)
 class Message:
     pass
 
@@ -90,31 +112,6 @@ class Message:
 class DomainMessage(Message):
     event: DomainEvent
     metadata: DomainEventMetadata
-
-    @classmethod
-    def from_event_store_event(cls, event_store_event: EventStoreEvent) -> 'DomainMessage':
-        event_class = event_type_registry.get_event_class(event_store_event.event_type)
-        metadata_dict = json.loads(event_store_event.metadata.decode())
-        metadata = DomainEventMetadata.from_dict(metadata_dict)
-        payload_dict = json.loads(event_store_event.payload.decode())
-        domain_event = event_class(metadata=metadata, **payload_dict)
-
-        message = cls(
-            event=domain_event,
-            metadata=metadata
-        )
-        return message
-
-    def to_new_event_store_event(self) -> NewEventStoreEvent:
-        payload = json.dumps(self.event.to_dict()).encode()
-        metadata = json.dumps(self.metadata.to_dict()).encode()
-
-        new_stream_event = NewEventStoreEvent(
-            event_type=self.metadata.event_type,
-            payload=payload,
-            metadata=metadata
-        )
-        return new_stream_event
 
 
 @dataclass(frozen=True)

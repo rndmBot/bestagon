@@ -1,7 +1,7 @@
 Concurrency
 ===========
 
-Event-sourcing is very IO bound by nature. Every time you execute use cases, there is a lot of
+AggrgateEvent-sourcing is very IO bound by nature. Every time you execute use cases, there is a lot of
 communication happening with different storage under the hood:
 - repository communicates with the event store when it retrieves and saves aggregates
 - projections update and retrieve data from the reporting database

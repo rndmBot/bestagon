@@ -1,34 +1,17 @@
 from collections import defaultdict
-from typing import Dict, Type, TYPE_CHECKING, List
+from typing import Dict, Type, List, Callable
 
-from bestagon.core.exceptions import BestagonError
-from bestagon.core.message import DomainEvent
-
-if TYPE_CHECKING:
-    from bestagon.core.aggregate import Aggregate
-
-
-class AggregateTypeAlreadyRegisteredError(BestagonError):
-    pass
-
-
-class AggregateTypeNotRegisteredError(BestagonError):
-    pass
-
-
-class EventTypeAlreadyRegisteredError(BestagonError):
-    pass
-
-
-class EventTypeNotRegisteredError(BestagonError):
-    pass
+from bestagon.core.aggregate import Aggregate
+from bestagon.core.exceptions import AggregateTypeNotRegisteredError, AggregateTypeAlreadyRegisteredError, \
+    EventTypeNotRegisteredError, EventTypeAlreadyRegisteredError, CommandHandlerAlreadyRegisteredError, \
+    CommandHandlerNotRegisteredError, QueryHandlerNotRegisteredError, QueryHandlerAlreadyRegisteredError
+from bestagon.core.message import DomainEvent, Command, Query
 
 
 class AggregateTypeRegistry:
     # TODO - docs
     def __init__(self):
         self._aggregate_class_map: Dict[str, Type[Aggregate]] = dict()
-        self._aggregate_type_map: Dict[Type[Aggregate], List[str]] = defaultdict(list)
 
     def get_aggregate_class(self, aggregate_type: str) -> Type[Aggregate]:
         if aggregate_type in self._aggregate_class_map:
@@ -37,15 +20,6 @@ class AggregateTypeRegistry:
             f'Failed to retrieve aggregate class for aggregate type {aggregate_type}: '
             f'the aggregate type is not registered.'
         )
-
-    def get_aggregate_types(self, aggregate_class: Type[Aggregate]) -> List[str]:
-        aggregate_types = self._aggregate_type_map.get(aggregate_class)
-        if not aggregate_types:
-            raise AggregateTypeNotRegisteredError(
-                f'Fialed to retrieve aggregate types for aggregate class {aggregate_class.__class__.__qualname__}: '
-                f'no aggregate types registered for the aggregate'
-            )
-        return aggregate_types
 
     def register_aggregate_type(self, aggregate_type: str, aggregate_class: Type[Aggregate]) -> None:
         if not issubclass(aggregate_class, Aggregate):
@@ -69,7 +43,6 @@ class AggregateTypeRegistry:
             )
 
         self._aggregate_class_map[aggregate_type] = aggregate_class
-        self._aggregate_type_map[aggregate_class].append(aggregate_type)
 
 
 class EventTypeRegistry:
@@ -122,13 +95,53 @@ class EventTypeRegistry:
         self._event_type_map[event_class].append(event_type)
 
 
+class CommandHandlerRegistry:
+    # TODO - there should be a mechanism of automatic registration of command handlers
+
+    def __init__(self):
+        self._command_handler_map: Dict[Type[Command], Callable] = dict()
+
+    def get_command_handler(self, command_type: Type[Command]) -> Callable:
+        if not command_type in self._command_handler_map:
+            raise CommandHandlerNotRegisteredError(f'No command handler registered for command {command_type}')
+        return self._command_handler_map[command_type]
+
+    def register_command_handler(self, command_type: Type[Command], command_handler: Callable) -> None:
+        if command_type in self._command_handler_map:
+            raise CommandHandlerAlreadyRegisteredError(
+                f'Failed to register command handler for command type {command_type}: '
+                f'command handler for specified command type already registered.'
+            )
+        self._command_handler_map[command_type] = command_handler
+
+
+class QueryHandlerRegistry:
+    # TODO - there should be a mechanism of automatic query hanlders registration
+
+    def __init__(self):
+        self._query_handler_map: Dict[Type[Query], Callable] = dict()
+
+    def get_query_handler(self, query_type: Type[Query]) -> Callable:
+        if query_type not in self._query_handler_map:
+            raise QueryHandlerNotRegisteredError(f'No query handler registered for query {query_type}')
+        return self._query_handler_map[query_type]
+
+    def register_query_handler(self, query_type: Type[Query], query_handler: Callable) -> None:
+        if query_type in self._query_handler_map:
+            raise QueryHandlerAlreadyRegisteredError(f'Query handler already registered for query {query_type}')
+        self._query_handler_map[query_type] = query_handler
+
+
 aggregate_type_registry = AggregateTypeRegistry()
 event_type_registry = EventTypeRegistry()
+command_handler_registry = CommandHandlerRegistry()
+query_handler_registry = QueryHandlerRegistry()
 
 
 def register_aggregate_type(aggregate_type: str):
     def decorator(cls: Type[Aggregate]) -> Type[Aggregate]:
         aggregate_type_registry.register_aggregate_type(aggregate_type=aggregate_type, aggregate_class=cls)
+        cls._AGGREGATE_TYPE = aggregate_type
         return cls
     return decorator
 
@@ -136,5 +149,6 @@ def register_aggregate_type(aggregate_type: str):
 def register_event_type(event_type: str):
     def decorator(cls: Type[DomainEvent]) -> Type[DomainEvent]:
         event_type_registry.register_event_type(event_type=event_type, event_class=cls)
+        cls._EVENT_TYPE = event_type
         return cls
     return decorator

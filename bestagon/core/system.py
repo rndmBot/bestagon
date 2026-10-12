@@ -1,14 +1,16 @@
+import datetime
 import logging
 from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Tuple, Dict
+from uuid import uuid4
 
 from bestagon.core.checkpoint_store import CheckpointStore
 from bestagon.core.event_processor import Application, Projection
 from bestagon.core.event_store import EventStore
-from bestagon.core.mapper import mapper
-from bestagon.core.message import Command, Query
+from bestagon.core.message import Command, Query, TracingMetadata, CommandMetadata, CommandMessage
+from bestagon.core.registry import command_handler_registry, query_handler_registry
 
 logger = logging.getLogger(__name__)
 
@@ -67,25 +69,36 @@ class EventSourcedSystem(ABC):
         self._projections[proj.name] = proj
 
     @staticmethod
-    async def execute_command(command: Command) -> None:
-        """
-        TODO - command bus
-            There should be interceptors on command bus, they can alter the command message by adding metadata. They can also block the command by throwing an exception.
+    async def execute_command(command: Command, tracing_metadata: TracingMetadata | None) -> None:
+        # TODO - there should be another component responsible for metadata creation and propagation - MetadataFactory
+        command_id = str(uuid4())
 
-        TODO - Structural validation
-            There is no point in processing a command if it does not contain all required information in the correct format.
-            In fact, a command that lacks information should be blocked as early as possible, preferably even before a transaction has been started.
-            Therefore, an interceptor should check all incoming commands for the availability of such information. This is called structural validation.
-        """
-        # TODO - FUTURE - there should be command bus
-        command_handler = mapper.get_command_handler(command_type=type(command))
-        await command_handler(command)
+        if tracing_metadata is None:
+            tracing_metadata = TracingMetadata(
+                correlation_id=str(uuid4()),
+                causation_id=command_id
+            )
+
+        command_metadata = CommandMetadata(
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
+            command_id=command_id,
+            command_type=command.__class__.__qualname__,
+            correlation_id=tracing_metadata.correlation_id,
+            causation_id=tracing_metadata.causation_id
+        )
+        command_message = CommandMessage(
+            command=command,
+            metadata=command_metadata
+        )
+
+        command_handler = command_handler_registry.get_command_handler(command_type=type(command))
+        await command_handler(command_message)
 
     @staticmethod
     async def execute_query(query: Query) -> Any:
         # TODO - FUTURE - there should be query bus
         # TODO - query bus can provide query interceptors for validation and query modification
-        query_handler = mapper.get_query_handler(type(query))
+        query_handler = query_handler_registry.get_query_handler(type(query))
         result = await query_handler(query)
         return result
 

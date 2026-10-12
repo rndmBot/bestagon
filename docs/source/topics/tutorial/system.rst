@@ -1,4 +1,4 @@
-Event-Sourced System
+AggrgateEvent-Sourced System
 ====================
 
 After you have defined your domain model, applications and projections, it is time to tie everything together.

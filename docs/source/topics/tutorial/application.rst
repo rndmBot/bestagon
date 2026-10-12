@@ -40,7 +40,7 @@ ID, your applications should also have a unique identifier - its name. It is use
             return 'bonds_application'  # Unique across your system
 
 
-Event-sourced repository
+AggrgateEvent-sourced repository
 ------------------------
 
 These are technical details for those who want to get a better understanding of how the framework works internally.

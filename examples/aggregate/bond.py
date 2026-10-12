@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from datetime import date
+from typing import Dict, Type, Callable
 from uuid import uuid5, NAMESPACE_URL
 
-from bestagon.core.aggregate import Aggregate, event_handler, DomainException
+from bestagon.core.aggregate import Aggregate
+from bestagon.core.exceptions import DomainException
 from bestagon.core.registry import register_aggregate_type, register_event_type
 
 
@@ -12,7 +14,7 @@ class Bond(Aggregate):
     # Events are defined as nested classes to keep things in order
     @dataclass(frozen=True)
     @register_event_type('BondIssued')
-    class Issued(Aggregate.Created):
+    class Issued(Aggregate.AggregateCreated):
         isin: str
         issue_date: str
         maturity_date: str
@@ -24,14 +26,14 @@ class Bond(Aggregate):
 
     @dataclass(frozen=True)
     @register_event_type('BondDaysToMaturityChanged')
-    class DaysToMaturityChanged(Aggregate.Event):
+    class DaysToMaturityChanged(Aggregate.AggrgateEvent):
         isin: str
         old_days_to_maturity: int
         new_days_to_maturity: int
 
     @dataclass(frozen=True)
     @register_event_type('BondMatured')
-    class Matured(Aggregate.Event):
+    class Matured(Aggregate.AggrgateEvent):
         isin: str
 
     def __init__(self, event: Issued, aggregate_id: str, aggregate_version: int):
@@ -98,11 +100,9 @@ class Bond(Aggregate):
         return self._maturity_segment
 
     # Private methots, that start with `_when` are event handlers, they are responsible for changing the state of the aggregate
-    @event_handler(DaysToMaturityChanged)
     def _when_days_to_maturity_changed(self, event: DaysToMaturityChanged) -> None:
         self._days_to_maturity = event.new_days_to_maturity
 
-    @event_handler(Matured)
     def _when_matured(self, event: Matured) -> None:
         self._matured = True
 
@@ -110,6 +110,13 @@ class Bond(Aggregate):
     def create_id(isin: str) -> str:
         aggregate_uid = uuid5(NAMESPACE_URL, isin)
         return str(aggregate_uid)
+
+    def get_event_handler_routing(self) -> Dict[Type['Aggregate.AggrgateEvent'], Callable]:
+        routing = {
+            self.DaysToMaturityChanged: self._when_days_to_maturity_changed,
+            self.Matured: self._when_matured
+        }
+        return routing
 
     @classmethod
     def issue(
@@ -134,7 +141,7 @@ class Bond(Aggregate):
             coupon_frequency=coupon_frequency,
             day_count_convention=day_count_convention
         )
-        obj = cls.create_aggregate(event=event, aggregate_id=aggregate_id, aggregate_version=cls.INITIAL_VERSION)
+        obj = cls.create_aggregate(event=event, aggregate_id=aggregate_id)
         return obj
 
     def set_matured(self) -> None:
