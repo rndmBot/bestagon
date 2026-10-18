@@ -7,18 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.0] - 2026-09
 WARNING - the update contains breaking changes which makes this version not backward compatible with
-previous versions.
+previous versions. The metadata propagation mechanism have been reworked toward automatic metadata
+population and propagation making `Aggregate` class pure and free from necessity to populate metadata 
+manually.
+
 ### Added
-- `Command` now contains new mandatory attribute `metadata` which should be an instance of
-  `CommandMetadata` class
-- New `CommandMetadata` class which contains new fields for observability.
-- New `DomainEventContext` class which contains data that could be propagated from event to event.
+- `CommandMetadata` class to store medatadata propagated with command.
+- `CommandMessage` class which serves as an envelope for `Command` and `CommandMetadata`.
+- `DomainEventMetadata` class to store metadata for the specific domain event.
+- `DomainMessage` class to serve as an envelope for `DomainEvent` and `DomainMetadata`
 
 ### Changed
-- `DomainEventMetadata` class now contains new mandatory field `event_id`
-- `DomainEventMetadata` class now contains new fields for identification and observability
-- `DomainEventMetadata` class now contains new conveniece factory methods to create metadata from
-  aggregate instance.
+- `DomainEvent` no longer contain metadata
+- `EventProcessor`'s `process_event` method renamed to `process_message` and accepts `DomainMessage`
+  as parameter.
 - `Aggregate`'s `_create` method renamed to `create_aggregate`
 - `EventSourcedRepository` now uses `aggregate_id` as stream name instead of combination of
   `aggregate_type` + `aggregate_id`. This change is breaking, it will not be possible to retrieve agregates
