@@ -1,4 +1,7 @@
+import datetime
 from dataclasses import dataclass, asdict
+from uuid import uuid4
+
 from bestagon.core.exceptions import EventTypeNotRegisteredError
 
 
@@ -89,6 +92,17 @@ class CommandMetadata:
     # Tracing identifiers
     correlation_id: str
     causation_id: str
+
+    @classmethod
+    def from_domain_event_metadata(cls, domain_event_metadata: DomainEventMetadata) -> 'CommandMetadata':
+        obj = cls(
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
+            command_id=str(uuid4()),
+            command_type=cls.__qualname__,
+            correlation_id=domain_event_metadata.correlation_id,
+            causation_id=domain_event_metadata.event_id
+        )
+        return obj
 
 
 @dataclass(frozen=True)
