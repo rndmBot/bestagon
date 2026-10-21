@@ -1,18 +1,26 @@
 Event-Sourced System
 =====================
 
-After you have defined your domain model, applications and projections, it is time to tie everything together.
-For that purpose, you use the ``EventSourcedSystem`` class (referred to as the system), which orchestrates communication
-between applications and projections and executes commands and queries.
+Congratulations on making this so far! By now you should have an understanding how to define your domain model
+using a set of event-sourced aggregates, write use cases using aplications and read models with projections and now
+it is time to tie everything together using the ``EventSourcedSystem`` class.
 
-Firstly, the system is a boundary between your domain logic and the outside world.
-The outside world never calls use cases in your applications directly or retrieves data from projections;
-instead, you prepare commands and queries, and execute them using the system's ``execute_command`` and ``execute_query`` methods.
-Such an approach allows you to hide the complexity of your business domain from the outside world behind the simple
-interface and gives you more flexibility to adapt your system for future changes.
+This component fullfill two very important functions:
+- It orchestrates the communication between all other components, especially applications and projections.
+- It serves as a boundary that separates your system from outside world.
 
-Second, the system is responsible for the initialization and orchestration of applications and projections.
-You initialize them inside the system, and route commands and queries to the responsible handlers.
+The second function deserves a better explanation. Imagine a medieval castle - in the center it has a great hall where
+all the important desicions are made - this is your domain model. The castle is surrounded by a high wall and nothing
+from the outside cant reach the great hall without passing the gate and guards. The ``EventSourcedSystem`` serves as
+a high wall that protects your domain model from the exposure to the outside world, and this wall has a gate that allows
+messages to pass in a form of commands and queries.
+
+This gate is implemented as a couple of methods:
+- ``execute_command`` - which takes a ``Command`` as an input and executes using registered command handler
+- ``execute_query`` - which takes a ``Query`` as an input, executes using registered query handler and returns result.
+
+Such boundary is crucial for the whole system to work properly - you should never expose your domain model to the outside
+world to protect your invariants.
 
 Defining the system
 -------------------
@@ -22,6 +30,7 @@ To create a system, use the ``EventSourcedSystem`` class:
 .. code-block:: python
 
     from bestagon.core.system import EventSourcedSystem
+
 
     class BondsSystem(EventSourcedSystem):
         def __init__(event_store: EventStore, checkpoint_store: CheckpointStore, neo_driver: AsyncDriver):
@@ -57,10 +66,12 @@ Under the hood, the framework will make the necessary initializations and create
 
 .. code-block:: python
 
-    async def initialize(self) -> None:
-        await super().initialize()
-        await self.add_application(self.bonds_application)
-        await self.add_projection(self.bonds_projection)
+    class BondsSystem(EventSourcedSystem):
+
+        async def initialize(self) -> None:
+            await super().initialize()
+            await self.add_application(self.bonds_application)
+            await self.add_projection(self.bonds_projection)
 
 
 Routing commands and queries
@@ -73,15 +84,16 @@ One place to do that is inside ``register_command_handlers`` and ``register_quer
 
 .. code-block:: python
 
-    from bestagon.core.mapper import mapper
+    class BondsSystem(EventSourcedSystem):
 
-    # Registering commands and queries inside the system
-    def register_command_handlers(self) -> None:
-        mapper.register_command_handler(IssueBond, self.bonds_application.issue)
-        mapper.register_command_handler(UpdateTermToMaturity, self.bonds_application.update_term_to_maturity)
-        mapper.register_command_handler(SetMatured, self.bonds_application.set_matured)
+        # Registering commands and queries inside the system
+        def register_command_handlers(self) -> None:
+            command_handler_registry.register_command_handler(IssueBond, self.bonds_application.issue)
+            command_handler_registry.register_command_handler(UpdateTermToMaturity, self.bonds_application.update_term_to_maturity)
+            command_handler_registry.register_command_handler(SetMatured, self.bonds_application.set_matured)
 
-    def register_query_handlers(self) -> None:
-        mapper.register_query_handler(GetBondsQuery, self.bonds_projection.get_bonds)
+        def register_query_handlers(self) -> None:
+            query_handler_registry.register_query_handler(GetBondsQuery, self.bonds_projection.get_bonds)
 
+s
 After that, your system is ready to be used. In the next tutorial, you will learn how to serve your system across the network using FastAPI.
