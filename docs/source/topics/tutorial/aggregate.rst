@@ -3,7 +3,7 @@ Aggregate
 =========
 
 An aggregate is a central part of your domain model. It represents an entity or collection of entities that exists in your
-domain, for example ``Customer``, ``Merchant`` or ``Transaction``. Each aggregate is unique and cannot be substituted by another one and,
+domain, for example ``Customer``, ``Merchant``, or ``Transaction``. Each aggregate is unique and cannot be substituted by another one and,
 most importantly, an aggregate serves as a source of domain events, which are persisted in the event store.
 
 This tutorial will give you step-by-step instructions on how to write event-sourced aggregates using the Bestagon framework.

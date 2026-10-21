@@ -1,29 +1,29 @@
 Projection
 ==========
 
-So up for now you should have a basic understanding how to implement domain model using a set of event-sourced aggregates
-and execute use cases using applications. Use cases make your aggregates work and aggregates provide you with dmain events that
-are the truth that is persisted in the event store. You can react to the events, but just events are not enough for the
-system to be useful, you need all kinds of information about the current state of the system, for example:
+So far you should have a basic understanding of how to implement a domain model using a set of event-sourced aggregates
+and execute use cases using applications. Use cases make your aggregates work, and aggregates provide you with domain events that
+are the truth and persisted in the event store. You can react to the events, but events alone are not enough for the
+system to be useful - you need all kinds of information about the current state of the system, for example:
 
 - A table to show which customers are registered in the system.
 - A graph that shows how different customers are related to each other.
 - A table to show the history of transactions of a specific customer.
 
-It is very difficult and sometimes even impossible to query such information from the stream of events, the good
-news that you do not need to because event-sourced systems provide a very powerful mechanism how to turn these
+It is very difficult, and sometimes even impossible, to query such information from the stream of events. The good
+news is that you do not need to, because event-sourced systems provide a very powerful mechanism to turn these
 events into read models - a projection.
 
 Projection takes the stream of events and populates a read model by replaying events one by one. The read model can be
-in any form you can imagine - a table, graph, JSON file and so on. It is populated in a near
-real time and can be easily dropped if not needed anymore because the source of truth - events, are kept intact and can be
-used again to build new projection.
+in any form you can imagine - a table, graph, JSON file, and so on. It is populated in near
+real-time and can be easily dropped if not needed anymore, because the source of truth - events - are kept intact and can be
+used again to build a new projection.
 
 
 Creating projection
 -------------------
 
-THe projection in Bestagon is represented by ``Projection`` class.
+The projection in Bestagon is represented by the ``Projection`` class.
 
 .. code-block:: python
 
@@ -34,7 +34,7 @@ THe projection in Bestagon is represented by ``Projection`` class.
         pass
 
 Before we move forward, it is good practice to define an abstract interface of your projection.
-It will make your life much easier if you decide to switch the data storage used by the projection for example to migrate
+It will make your life much easier if you decide to switch the data storage used by the projection, for example to migrate
 from SQLite to Neo4j.
 
 .. code-block:: python
@@ -61,34 +61,16 @@ from SQLite to Neo4j.
             raise NotImplementedError
 
 
-There are two types of methods - setters and query handlers.
-Setters are pretty simple - they take necessary parameters and
+The projection defines two types of methods:
 
+- Setters - these methods take arbitrary input parameters, change the data in the database, and return nothing. You use these
+  methods to add something new to your database or change existing data.
+- Query handlers - these methods take an instance of the ``Query`` class as input and return the data for this query.
+  You use these methods to retrieve data from the projection.
 
-Query handlers
---------------
-
-This abstract interface will be used as a template for any future projection that stores information about bonds,
-and we can split these methods by two categories. The first are methods that receive input parameters to populate the
-read model. They usually start with `add` or `set` prefixes and return nothing. The second category is so-called query
-handlers. These methods take a Query as an input parameter and return requested data. The query is a subclass of
-`Query` class - it is a frozen dataclass with a set of predefined filters. In our example, we have one query - `GetBondsQuery`
-and it has only one attribute that allows us to filter bonds by whether they have matured or not.
-
-.. code-block:: python
-
-    @dataclass(frozen=True)
-    class GetBondsQuery(Query):
-        matured: bool | None
-        # Additional filters according to your requirements
-
-One thing to mention here is that query handler **must take a query** as an input parameter even if you do not need any
-filters. In such case, you create an empty query without filters and pass it as a parameter.
-
-Initialization
---------------
-
-Now it is time to write a projection. In this example we will use Neo4J as a database to store our read model:
+We will return to these methods later. Now it is time to create a concrete implementation of the projection.
+For this tutorial, we will use a Neo4j graph database to store our data, but you can use any storage technology you want
+depending on your needs and technology stack.
 
 .. code-block:: python
 
@@ -99,163 +81,210 @@ Now it is time to write a projection. In this example we will use Neo4J as a dat
             self.database_name = 'bonds-projection'
 
 The projection takes several parameters as input. The first one is a checkpoint store instance.
-This parameter is mandatory, because, similar to `Application`, `Projection` needs to track which events
+This parameter is mandatory because, similar to ``Application``, ``Projection`` needs to track which events
 have already been processed. All other parameters are related to the database you use to store your read model.
-In this example, it is a Neo4J driver that gives us acces to the database. In constructor, you should always call
-the constructor of the superclass, and then you define your projection-specific properties.
+In this example, it is a Neo4j driver that gives us access to the database.
+Remember to always call ``__init__`` of the superclass.
 
-When creating your projection, it is often required to configure the database you use.
-For example, create a separate database and indexes for the read model. To do that, you can use the `initialize`
-method, which will be called by the system at the startup stage:
-
-.. code-block:: python
-
-    async def initialize(self) -> None:
-        cypher = '''
-        CREATE DATABASE $database_name IF NOT EXISTS
-        '''
-        async with self.driver.session() as sess:
-            await sess.run(cypher, database_name=self.database_name)
-
-Also, similar to `Application` class you need to implement `get_name` method:
+In most cases, you will need to perform additional initialization asynchronously, for example to configure the database and/or
+create a database, indexes, and constraints if they do not exist. For this purpose you can reimplement the ``initialize`` method
+that takes no parameters and allows you to run arbitrary code when your projection starts.
 
 .. code-block:: python
 
-    def get_name(self) -> str:
-        return 'bonds_projection'
+    class Neo4JBondsProjection(BondsProjection):
+
+        async def initialize(self) -> None:
+            cypher = '''
+            CREATE DATABASE $database_name IF NOT EXISTS
+            '''
+            async with self.driver.session() as sess:
+                await sess.run(cypher, database_name=self.database_name)
+
+Also, similar to the ``Application`` class, you need to implement the ``get_name`` method to provide the name of the projection:
+
+.. code-block:: python
+
+    class Neo4JBondsProjection(BondsProjection):
+
+        def get_name(self) -> str:
+            return 'bonds_projection'
+
 
 Populating projection
 ---------------------
 
-Now we are ready to start populating the projection. The process is very similar to what you saw in the application tutorial and consists of three steps:
+Let's return to the methods we defined inside our abstract interface - ``add_bond``, ``set_term_to_maturity``,
+and ``set_matured``. The ``add_bond`` method adds a new record in your database that contains the basic information about the newly
+issued bond, while ``set_term_to_maturity`` and ``set_matured`` only change specific values for an already added bond.
 
-- Implement add/set methods we defined on abstract interface.
-- Provide even routing to map events to corresponding event handlers.
-- Implement event handlers to react to events.
-
-We start with implementation of add/set methods. In these methods, you receive input parameters and use them to populate the read model. Here is an example:
-
-.. code-block:: python
-
-    async def add_bond(self, isin: str, issue_date: str, maturity_date: str, coupon: float) -> None:
-        cypher = '''
-        MERGE (b:Bond {isin: $isin})
-        ON CREATE
-            SET b += $props
-        '''
-        props = {
-            'issue_date': date.fromisoformat(issue_date),
-            'maturity_date': date.fromisoformat(maturity_date),
-            'coupon': coupon
-        }
-        async with self.driver.session(default_access_mode=neo4j.WRITE_ACCESS, database=self.database_name) as sess:
-            await sess.run(cypher, isin=isin, props=props)
-
-    async def set_term_to_maturity(self, isin: str, ttm: int) -> None:
-        cypher = '''
-        MATCH (b:Bond {isin: $isin})
-        SET b.ttm = $ttm
-        '''
-        async with self.driver.session(default_access_mode=neo4j.WRITE_ACCESS, database=self.database_name) as sess:
-            await sess.run(cypher, isin=isin, ttm=ttm)
-
-    async def set_matured(self, isin: str, matured: bool) -> None:
-        cypher = '''
-        MATCH (b:Bond {isin: $isin})
-        SET b.matured = $matured
-        '''
-        async with self.driver.session(default_access_mode=neo4j.WRITE_ACCESS, database=self.database_name) as sess:
-            await sess.run(cypher, isin=isin, matured=matured)
-
-
-These methods are used to populate the projection. Now we need to trigger them automatically as a reaction to
-specific events and the first thing we need to do is to reimplement the `get_event_routing` method to map events
-we want to react to, to the corresponding event handlers:
+They have one thing in common - they contain the code that directly communicates with the database and changes the
+stored data.
 
 .. code-block:: python
 
-    def get_event_routing(self) -> dict:
-        routing = {
-            Bond.Issued: self._when_bond_issued,
-            Bond.TermToMaturityChanged: self._when_ttm_changed,
-            Bond.Matured: self._when_matured
-        }
-        return routing
+    class Neo4JBondsProjection(BondsProjection):
 
-    async def _when_bond_issued(self, event: Bond.Issued) -> None:
-        await self.add_bond(isin=event.isin, issue_date=event.issue_date, maturity_date=event.maturity_date, coupon=event.coupon)
+        async def add_bond(self, isin: str, issue_date: str, maturity_date: str, coupon: float) -> None:
+            cypher = '''
+            MERGE (b:Bond {isin: $isin})
+            ON CREATE
+                SET b += $props
+            '''
+            props = {
+                'issue_date': date.fromisoformat(issue_date),
+                'maturity_date': date.fromisoformat(maturity_date),
+                'coupon': coupon
+            }
+            async with self.driver.session(default_access_mode=neo4j.WRITE_ACCESS, database=self.database_name) as sess:
+                await sess.run(cypher, isin=isin, props=props)
 
-    async def _when_ttm_changed(self, event: Bond.TermToMaturityhanged) -> None:
-        await self.set_term_to_maturity(isin=event.isin, ttm=event.new_ttm) -> None:
+        async def set_term_to_maturity(self, isin: str, ttm: int) -> None:
+            cypher = '''
+            MATCH (b:Bond {isin: $isin})
+            SET b.ttm = $ttm
+            '''
+            async with self.driver.session(default_access_mode=neo4j.WRITE_ACCESS, database=self.database_name) as sess:
+                await sess.run(cypher, isin=isin, ttm=ttm)
 
-    async def _when_matured(self, event: Bond.Matured) -> None:
-        await self.set_matured(isin=event.isin, matured=True)
+        async def set_matured(self, isin: str, matured: bool) -> None:
+            cypher = '''
+            MATCH (b:Bond {isin: $isin})
+            SET b.matured = $matured
+            '''
+            async with self.driver.session(default_access_mode=neo4j.WRITE_ACCESS, database=self.database_name) as sess:
+                await sess.run(cypher, isin=isin, matured=matured)
 
 
-Here we also implement event handlers. The one and only responsibility of an event handler is to serve as a glue
-between an event and the method that populates the read model. The event handler takes an event as an input
-parameter and calls the necessary method that updates the read model. It should never contain any business logic
-and should not modify data in the database directly.
+Event handlers
+--------------
 
-Querying projection
--------------------
+Now that we have our setters, the question is how we call them. You definitely should not call them manually;
+these methods should be called automatically as a reaction to the events that have happened in your domain model.
 
-Now we need to implement a query handler. This method is much more complex, because it contains logic to build a
+To make it real, you need to let the projection know which events you want to react to and how they should be called. The
+first step is to define event handlers. These are simple methods that take an instance of ``DomainMessage`` as an
+input parameter. Inside the handler, you extract the event and use the values from the event to call the necessary setter.
+
+.. code-block:: python
+
+    class Neo4JBondsProjection(BondsProjection):
+
+        async def _when_bond_issued(self, message: DomainMessage) -> None:
+            event = cast(Bond.Issued, message.event)
+            await self.add_bond(isin=event.isin, issue_date=event.issue_date, maturity_date=event.maturity_date, coupon=event.coupon)
+
+        async def _when_ttm_changed(self, message: DomainMessage) -> None:
+            event = cast(Bond.TermToMaturityChanged, message.event)
+            await self.set_term_to_maturity(isin=event.isin, ttm=event.new_ttm)
+
+        async def _when_matured(self, message: DomainMessage) -> None:
+            event = cast(Bond.Matured, message.event)
+            await self.set_matured(isin=event.isin, matured=True)
+
+
+After you have defined your event handlers, you need to reimplement the ``get_event_routing`` method to tie everything together.
+The ``get_event_routing`` method should return the dictionary with domain event types as keys and event handlers as values:
+
+.. code-block:: python
+
+    class Neo4JBondsProjection(BondsProjection):
+
+        def get_event_routing(self) -> dict:
+            routing = {
+                Bond.Issued: self._when_bond_issued,
+                Bond.TermToMaturityChanged: self._when_ttm_changed,
+                Bond.Matured: self._when_matured
+            }
+            return routing
+
+
+Query handlers
+--------------
+
+The final thing to do is to implement query handlers. To recap - the query handlers take an instance of the ``Query`` class
+as an input parameter and return an arbitrary value, usually a dictionary or a list of dictionaries.
+
+First, let's figure out what ``Query`` is. The ``Query`` is a base class for each query that your system handles.
+You use it to create a concrete implementation that is named according to your business domain and contains all the
+necessary filters to retrieve the necessary data from the database.
+
+.. code-block:: python
+
+    @dataclass(frozen=True)
+    class GetBondsQuery(Query):
+        matured: bool | None
+        # Additional filters according to your requirements
+
+.. note::
+
+    There are cases when you do not need to provide any filters to retrieve the data; in such a case, you still need to
+    provide the query, but it will be empty, without any filters.
+
+It is time to finally implement a query handler. This method is much more complex, because it contains logic to build a
 query, execute it and return the data. In this example we prepare a Cypher query with the necessary filters and
 retrieve data from the database as a list of dictionaries. This data can be easily passed through the network as a
 JSON file and converted to a table or any other visual representation:
 
 .. code-block:: python
 
-    async def get_bonds(self, query: GetBondsQuery) -> List[dict]:
-        filters = [
-        'b.matured = $matured' if query.matured is not None else '',
-        ]
-        filters = [f for f in filters if f]
-        if filters:
-            filters = ' AND '.join(filters)
-            filter_string = f'WHERE {filters}'
-        else:
-            filter_string = ''
+    class Neo4JBondsProjection(BondsProjection):
 
-        cypher = f'''
-        MATCH (b:Bond)
-        {filter_string}
-        WITH {{
-            isin: b.isin,
-            issue_date: toString(b.issue_date),
-            maturity_date: toString(b.maturity_date),
-            coupon: b.coupon,
-            ttm: b.ttm,
-            matured: coalesce(b.matured, false)
-        }} AS datum
-        RETURN datum
-        '''
-        async with self.driver.session(default_access_mode=neo4j.READ_ACCESS, database=self.database_name) as sess:
-            result = await sess.run(cypher, matured=query.matured, bond_type=query.bond_type)
-            data = await result.value()
-        return data
+        async def get_bonds(self, query: GetBondsQuery) -> List[dict]:
+            filters = [
+            'b.matured = $matured' if query.matured is not None else '',
+            ]
+            filters = [f for f in filters if f]
+            if filters:
+                filters = ' AND '.join(filters)
+                filter_string = f'WHERE {filters}'
+            else:
+                filter_string = ''
+
+            cypher = f'''
+            MATCH (b:Bond)
+            {filter_string}
+            WITH {{
+                isin: b.isin,
+                issue_date: toString(b.issue_date),
+                maturity_date: toString(b.maturity_date),
+                coupon: b.coupon,
+                ttm: b.ttm,
+                matured: coalesce(b.matured, false)
+            }} AS datum
+            RETURN datum
+            '''
+            async with self.driver.session(default_access_mode=neo4j.READ_ACCESS, database=self.database_name) as sess:
+                result = await sess.run(cypher, matured=query.matured)
+                data = await result.value()
+            return data
 
 
 Dropping projection
 -------------------
 
-Projections are disposable and to be able to comply with this requirement you need to reimplement an abstract `drop`
-method. Here you need to implement a logic to remove all the data from the database regarding the projection and should
-not bother about resetting checkpoints, because it is the responsibility of `EventSourcedSystem` class. In this example
-we implement a simple logic - we replace the existing database with the new one, removing all the data in it:
+One of the very powerful features of projections is that they are disposable. You can easily drop it when you decide
+that the read model is not useful anymore or it contains mistakes that need to be fixed. To make it real you need to reimplement
+the ``drop`` method for the projection. It should delete all the data from your database regarding this projection so it could be rebuilt
+by the framework.
 
 .. code-block:: python
 
-    async def drop(self) -> None:
-        cypher = 'CREAE OR REPLACE DATBASE $database_name'
-        async with self.driver.session() as sess:
-            await sess.run(cypher, database_name=self.database)
+    class Neo4JBondsProjection(BondsProjection):
+
+        async def drop(self) -> None:
+            cypher = 'CREATE OR REPLACE DATABASE $database_name'
+            async with self.driver.session() as sess:
+                await sess.run(cypher, database_name=self.database_name)
 
 
+.. note::
 
-After that, your projection is complete. Remember - you can define any number of projections you want using any
-storage that is available for you. Projectors can be easily dropped and rebuilt again without the fear of
+    You do not need to call ``drop`` manually; this method is supposed to be called by the framework internally
+    when you execute the ``rebuild_projection`` method inside the ``EventSourcedSystem`` class.
+
+Now your projection is complete. Remember - you can define any number of projections you want using any
+storage that is available for you. Projections can be easily dropped and rebuilt again without the fear of
 losing important data, because they are built from the source of truth - events.
 
-In the next tutorial you will learn how to tie everything together and create an even-sourced system.
+In the next tutorial, you will learn how to tie everything together and create an event-sourced system.

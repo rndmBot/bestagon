@@ -10,7 +10,7 @@ System configuration
 --------------------
 
 You start with the configuration of your system. Here we define an event store, checkpoint store,
-connection to the neo4j database and use it to initialize our system.
+connection to the Neo4j database and use it to initialize our system.
 
 .. code-block:: python
 
@@ -27,9 +27,9 @@ connection to the neo4j database and use it to initialize our system.
 FastAPI instance and system initialization
 ------------------------------------------
 
-Next, you need to define a FastAPI application. Take a look at the `lifespan` co-routine.
+Next, you need to define a FastAPI application. Take a look at the ``lifespan`` coroutine.
 FastAPI uses it to make the necessary initializations on startup (before the yield statement) and
-to shut down gracefully (after the yield statement). We can use this mechanism to initialize and shutdown our system.
+to shut down gracefully (after the yield statement). We can use this mechanism to initialize and shut down our system.
 
 .. code-block:: python
 
@@ -77,10 +77,10 @@ DTOs are used as an output format for endpoints that return data.
         matured: float
 
 
-Bodies give you an extra layer of validation. FastAPI works closely with pydantic, and you can use that to validate
+Bodies give you an extra layer of validation. FastAPI works closely with Pydantic, and you can use that to validate
 input parameters before they get to the system. If they are invalid, then the call to the endpoint should fail as soon as possible.
 
-Next we write our endpoints. They should be thin - you need to define a command, or query and execute them with the
+Next we write our endpoints. They should be thin - you need to define a command or query and execute them with the
 system and your endpoints should **never contain any business logic**. One thing to mention here - you must not open
 endpoints for all your use cases, only create endpoints for use cases that should be triggered externally and protect them well.
 
@@ -89,16 +89,16 @@ endpoints for all your use cases, only create endpoints for use cases that shoul
     @app.post('/issue_bond')
     async def issue_bond(body: IssueBondBody) -> None:
         command = IssueBond(
-            isin=command.isin,
-            issue_date=command.issue_date,
-            maturity_date=command.maturity_date,
-            coupon=comand.coupon
+            isin=body.isin,
+            issue_date=body.issue_date,
+            maturity_date=body.maturity_date,
+            coupon=body.coupon
         )
         await system.execute_command(command)
 
     @app.post('/update_ttm')
     async def update_ttm(body: UpdateTTMBody) -> None:
-        command = UpdateTermToMaturity(isin=command.isin)
+        command = UpdateTermToMaturity(isin=body.isin)
         await system.execute_command(command)
 
     @app.post('/get_bonds')
