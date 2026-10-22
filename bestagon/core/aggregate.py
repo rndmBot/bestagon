@@ -14,16 +14,17 @@ from bestagon.core.message import DomainEvent, DomainMessage
 @dataclass(frozen=True)
 class PendingEvent:
     """
-    The pending event represents the new event that already was triggered, but still not persisted in the event store.
-    It contains the original `DomainEvent` and `aggregate_version`. This `aggregate_version` is required for event persistence
-    because it should be propagated to `DomainEventMetadata` and the aggregate is the one and only source of this parameter.
+    The pending event represents the new event that was triggered, but not persisted in the event store.
+    It contains the original `DomainEvent` and `aggregate_version` that is used during the persistence step.
     """
     aggregate_version: int
     domain_event: DomainEvent
 
 
 class Aggregate(ABC):
-    # TODO - docs
+    """
+    The base class for event-sourced aggregtes.
+    """
 
     _AGGREGATE_TYPE = None
     INITIAL_VERSION = 0
@@ -55,7 +56,7 @@ class Aggregate(ABC):
 
     def __init_subclass__(cls, **kwargs):
         """
-        In your domain you can easily have aggregates that inherit other aggregates, for example: Customer -> VIPCustomer.
+        In your domain you can easily have aggregates that inherit from other aggregates, for example: Customer -> VIPCustomer.
         Such inheritance creates a dangerous situation when child inherits parent's aggregate type and, if child
         have not registered its own aggregate type using `register_aggregate_type` decorator, then parent's aggregate
         type will be used on serialization step which can make deserialization and reconstruction not possible.
@@ -163,6 +164,13 @@ class Aggregate(ABC):
         Reimplement to create ID of the aggregate.
         Please note that aggregate ID MUST BE GLOBALLY UNIQUE and no other aggregate accross the service should not
         share the same aggregate_id.
+
+        .. warning::
+
+            After defining the ``create_id`` method, be very careful when changing it.
+            If your changes lead to the creation of a different aggregate ID with the same parameters, then you
+            will not be able to reconstruct your previously saved aggregate from the event store.
+
         """
         raise NotImplementedError
 
@@ -185,10 +193,6 @@ class Aggregate(ABC):
                     self.Blocked: self._when_blocked
                 }
                 return routing
-
-        TODO - future improvements:
-            Event handler registration process is still manual and should be improved, ideally there should be
-            an @event_handler decorator which will register event handler automatically
         """
         raise NotImplementedError
 
