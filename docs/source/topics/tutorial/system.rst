@@ -1,25 +1,27 @@
 Event-Sourced System
 =====================
 
-Congratulations on making this so far! By now you should have an understanding how to define your domain model
-using a set of event-sourced aggregates, write use cases using aplications and read models with projections and now
+Congratulations on making it this far! By now you should have an understanding of how to define your domain model
+using a set of event-sourced aggregates, write use cases using applications and read models with projections, and now
 it is time to tie everything together using the ``EventSourcedSystem`` class.
 
-This component fullfill two very important functions:
+This component fulfills two very important functions:
+
 - It orchestrates the communication between all other components, especially applications and projections.
-- It serves as a boundary that separates your system from outside world.
+- It serves as a boundary that separates your system from the outside world.
 
 The second function deserves a better explanation. Imagine a medieval castle - in the center it has a great hall where
-all the important desicions are made - this is your domain model. The castle is surrounded by a high wall and nothing
-from the outside cant reach the great hall without passing the gate and guards. The ``EventSourcedSystem`` serves as
+all the important decisions are made - this is your domain model. The castle is surrounded by a high wall and nothing
+from the outside can't reach the great hall without passing the gate and guards. The ``EventSourcedSystem`` serves as
 a high wall that protects your domain model from the exposure to the outside world, and this wall has a gate that allows
 messages to pass in a form of commands and queries.
 
 This gate is implemented as a couple of methods:
-- ``execute_command`` - which takes a ``Command`` as an input and executes using registered command handler
-- ``execute_query`` - which takes a ``Query`` as an input, executes using registered query handler and returns result.
 
-Such boundary is crucial for the whole system to work properly - you should never expose your domain model to the outside
+- ``execute_command`` - which takes a ``Command`` as an input and executes it using the registered command handler.
+- ``execute_query`` - which takes a ``Query`` as an input, executes it using the registered query handler and returns the result.
+
+Such a boundary is crucial for the whole system to work properly - you should never expose your domain model to the outside
 world to protect your invariants.
 
 Defining the system
@@ -95,5 +97,5 @@ One place to do that is inside ``register_command_handlers`` and ``register_quer
         def register_query_handlers(self) -> None:
             query_handler_registry.register_query_handler(GetBondsQuery, self.bonds_projection.get_bonds)
 
-s
+
 After that, your system is ready to be used. In the next tutorial, you will learn how to serve your system across the network using FastAPI.
