@@ -15,7 +15,7 @@ sys.path.append(str(BASE_DIR / 'bestagon'))
 project = 'bestagon'
 copyright = f'{date.today().year}, Aleksandr Antonov'
 author = 'Aleksandr Antonov'
-release = '0.7.0'
+release = '0.9.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -28,7 +28,6 @@ extensions = [
 templates_path = ['_templates']
 exclude_patterns = []
 add_module_names = False
-
 
 
 # -- Options for HTML output -------------------------------------------------

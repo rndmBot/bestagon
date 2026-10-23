@@ -1,231 +1,236 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
-from typing import List, Tuple
+from dataclasses import dataclass
+from typing import List, Tuple, Dict, Callable, Type
 
-from bestagon.core.exceptions import AggregateIDMismatch, AggregateVersionError
+from bestagon.core.exceptions import AggregateTypeNotRegisteredError, EventHandlerNotRegisteredError
+from bestagon.core.message import DomainEvent, DomainMessage
+
+
+# TODO - future improvements:
+#   1. Improve event handler registration, ideally with @event_handler decorator
+#   2. The inheritance mechanism should be reviewed: how exactly children should inherit events and reregister types?
 
 
 @dataclass(frozen=True)
-class DomainEventMetadata:
+class PendingEvent:
     """
-    Contains the data that is not related to the business domain.
-    DO NOT base business decisions on metadata.
+    The pending event represents the new event that was triggered, but not persisted in the event store.
+    It contains the original `DomainEvent` and `aggregate_version` that is used during the persistence step.
     """
-
-    timestamp: str
-    aggregate_id: str
     aggregate_version: int
-    aggregate_type: str
-
-    @staticmethod
-    def create_timestamp() -> str:
-        return datetime.now(timezone.utc).isoformat()
-
-
-@dataclass(frozen=True)
-class DomainEvent:
-    metadata: DomainEventMetadata
-
-    def get_payload(self) -> dict:
-        payload = asdict(self).copy()
-        payload.pop('metadata')
-        return payload
-
-
-@dataclass(frozen=True)
-class Created(DomainEvent):
-    pass
+    domain_event: DomainEvent
 
 
 class Aggregate(ABC):
     """
-    According to Eric Evans book Domain Driven Design: Tackling Complexity in the Heart of Software:
-        An AGGREGATE is a cluster of associated objects that we treat as a unit for the purpose of data changes.
-
-    The class is an implementation of an Event Sourced Aggregate.
-    Each event sourced aggregate contains a set of predefined domain events, which discovered during modelling stage using event storming or other knowledge crunching method.
-
-    # Aggregate creation:
-    Event sourced aggregate starts its life cycle from 'Created' event. The only right way to do it currenty is to define factory method on the aggregate, this method
-    should create necessary event and then use '_create' method to instantiate aggregate.
-
-    For example, imagine you have a ShoppingCart aggregate, according to ubiquitious language of your domain it is 'created', so you can create a factory method, called 'create'
-    for the specified aggregate:
-
-        @classmethod
-        def create(cls, param_1, param_2) -> 'ShoppingCart':
-            metadata = DomainEventMetadata()  # Details omitted for simplicity
-            event = cls.Created(metadata, param_1, param_2)
-            obj = cls._create(event)
-            return obj
-
-    # Consequtive events:
-    In addition to 'Created' event, aggregate can have 0 or more events that can happen after creation of aggregate. Each of these events change aggregate state in some way.
-    For example, if we talk about shopping cart, then we can 'add_item' to it, so there will be a method on aggregate:
-
-        def add_item(command: AddShoppingCartItem) -> None:
-            # First, you perform validation of input parameters (whether it is a command, entity or just a set of parameters)
-            self.validate_command(command)
-
-            # Second, you execute business logic to figure out what have happened
-            # Business logic code in here
-
-            # Third - you create an Event which records what have happened
-            event = self.ItemAdded(
-                metadata=metadata,
-                item_name=command.item_name
-            )
-
-            # Finally - you trigger event to launch change of state process
-            sef.trigger_event(event)
-
-    When you trigger event, the aggregate calls 'mutate' method which validates the event and passes it to 'apply_event' method.
-    This method must know how to change the state of the aggregate and this is your responsibility to make it happen by reimplementing 'apply_event' method.
-    As a rule of thumb there is a simple way to do it:
-
-        def apply_event(event) -> None:
-            # 1. Define routing from event type to event handler
-            routing = {
-                self.ItemAdded: self._when_item_added,
-            }
-
-            event_handler = routing.get(type(event))  # 2. Take the corresponding event handler from routing
-            if event_handler is None:
-                super().apply_event(event)  # Default implementation will raise error if there is no handler
-            else:
-                event_handler(event)  # Handle event
-
-    Event handler should change the state of the aggregate:
-
-        def _when_item_added(event) -> None:
-            self._items.append(event.event_name)
-
-    ACHTUNG - your event handlers MUST NOT contain any business logic, it only should change the state of the aggregate based on what is stated in the event.
-
-    Next step - application module.
+    The base class for event-sourced aggregtes.
     """
 
+    _AGGREGATE_TYPE = None
     INITIAL_VERSION = 0
 
     @dataclass(frozen=True)
-    class Created(Created):
-        """Use it as a base class for Created events"""
+    class AggregateCreated(DomainEvent):
+        """
+        The AggregateCreated class represents an event from wich every aggregate starts it's
+        lifecycle and must be subclassed for every event that leads to the creation of aggregate.
+        Such event names should reflect the domain language, for example - if Customer starts it's lifecycle
+        after registering on a web-site, then Customer aggregate should have Registered event.
+        """
         pass
 
     @dataclass(frozen=True)
-    class Event(DomainEvent):
-        """Use it as a base class for consequtive events"""
+    class AggrgateEvent(DomainEvent):
+        """
+        This class represents any event that is happening in the aggregate after it's creation and must be subclassed
+        for every event that happens during the lifecycle of the aggregate.
+        """
         pass
 
-    def __init__(self, event: Created):
-        self._aggregate_id = event.metadata.aggregate_id
-        self._aggregate_version = event.metadata.aggregate_version
-        self._aggregate_created_on = datetime.fromisoformat(event.metadata.timestamp)
-        self._aggregate_modified_on = datetime.fromisoformat(event.metadata.timestamp)
+    def __init__(self, event: AggregateCreated, aggregate_id: str, aggregate_version: int):
+        self._aggregate_id = aggregate_id
+        self._aggregate_version = aggregate_version
+        self._original_version = aggregate_version
 
-        self._pending_events: List[DomainEvent] = list()
+        self._pending_events: List[PendingEvent] = list()
 
-    @property
-    def aggregate_created_on(self) -> datetime:
-        """The date and time when the aggregate was created."""
-        return self._aggregate_created_on
+    def __init_subclass__(cls, **kwargs):
+        """
+        In your domain you can easily have aggregates that inherit from other aggregates, for example: Customer -> VIPCustomer.
+        Such inheritance creates a dangerous situation when child inherits parent's aggregate type and, if child
+        have not registered its own aggregate type using `register_aggregate_type` decorator, then parent's aggregate
+        type will be used on serialization step which can make deserialization and reconstruction not possible.
+        To protect aggregate from this the method resets _AGGREGATE_TYPE to None, it is executed before the decorator,
+        so child aggregates without decorator will have _AGGREGATE_TYPE == None and it will raise an exception
+        on serialization state instead of silently corrupting the data.
+        """
+        super().__init_subclass__(**kwargs)
+        cls._AGGREGATE_TYPE = None
 
     @property
     def aggregate_id(self) -> str:
         return self._aggregate_id
 
     @property
-    def aggregate_modified_on(self) -> datetime:
-        """The date and time when the aggregate was modified."""
-        return self._aggregate_modified_on
-
-    @property
     def aggregate_type(self) -> str:
-        return self.get_aggregate_type()
+        if not self._AGGREGATE_TYPE:
+            raise AggregateTypeNotRegisteredError(
+                f'No aggregate type is registered for aggregate {self.__class__.__qualname__}, '
+                f'register the aggregate type with `register_aggregate_type` decorator to fix this problem, '
+                f'for example:\n'
+                f'@register_aggregate_type("customer")\n'
+                f'class Customer(Aggregate):\n'
+                f'  ....'
+            )
+        return self._AGGREGATE_TYPE
 
     @property
     def aggregate_version(self) -> int:
         return self._aggregate_version
 
     @property
-    def next_version(self) -> int:
-        """Convenience property to get the next version number of aggregate"""
-        return self.aggregate_version + 1
+    def original_version(self) -> int:
+        return self._original_version
 
     @property
-    def pending_events(self) -> Tuple[DomainEvent, ...]:
+    def pending_events(self) -> Tuple[PendingEvent, ...]:
         return tuple(self._pending_events)
 
+    def apply_event(self, event: 'Aggregate.AggrgateEvent') -> None:
+        event_handler_routing = self.get_event_handler_routing()
+        handler = event_handler_routing.get(type(event))
+        if handler is not None:
+            handler(event)
+        else:
+            raise EventHandlerNotRegisteredError(
+                f'Failed to apply event {type(event)} to aggregate "{self.__class__.__qualname__}": '
+                f'no event handler provided for the event, please check `get_event_handler_routing` method, it should contain '
+                f'the routing to valid event handler, for example {{self.CustomerCreated: self._when_customer_created}}'
+            )
+
+    def clear_pending_events(self) -> None:
+        self._pending_events.clear()
+
     @classmethod
-    def _create(cls, event: 'Created') -> 'Aggregate':
-        """Actually creates new aggregate. Should be used by factory method implemented on specific aggregate instance."""
-        obj = cls(event=event)
-        obj._pending_events.append(event)
+    def create_aggregate(cls, event: 'AggregateCreated', aggregate_id: str) -> 'Aggregate':
+        """
+        When you need to create a new instance of the aggregate you do not instantiate it directly, instead you need to
+        define a factory method on your aggregate class. This factory method should implement the following workflow:
+            1. Validate the input
+            2. Execute business logic if necessary
+            3. Create <AggregateCreated> event
+            4. Instantiate aggregate using `create_aggregate` method
+            5. Return newly created aggregate.
+
+        For example:
+            class Customer(Aggregate):
+                class Created(AgregateCreated):
+                    # Fields omited
+                    ...
+
+                @classmethod
+                def create(cls, customer_id: str) -> 'Customer':
+                    # Validate input
+                    # Execute business logic if necessary
+
+                    event = cls.Created(cutomer_id=customer_id)
+                    aggregate_id = cls.create_id(customer_id)
+                    obj = cls.create_aggregate(
+                        event=event,
+                        aggregate_id=aggregate_id,
+                        aggregate_version=cls.INITIAL_VERSION
+                    )
+                    return obj
+        """
+        if not isinstance(event, cls.AggregateCreated):
+            raise TypeError(
+                f'Failed to create aggregate {cls.__qualname__}: '
+                f'the event must be a subclass of <Aggregate.AggregateCreated> class'
+            )
+
+        obj = cls(event=event, aggregate_id=aggregate_id, aggregate_version=cls.INITIAL_VERSION)
+        pending_event = PendingEvent(
+            aggregate_version=cls.INITIAL_VERSION,
+            domain_event=event
+        )
+        obj._pending_events.append(pending_event)
+        obj._original_version = None
         return obj
-
-    def apply_event(self, event: DomainEvent) -> None:
-        """
-        Reimplement to provide change of state of the aggregate when event occur.
-        Each event must have the associated event handler.
-        """
-        raise TypeError(f'Unknown Event {type(event)}')
-
-    def clear_events(self) -> None:
-        """Clears all pending events on the Aggregate"""
-        self._pending_events = list()
-
-    def collect_events(self) -> List[DomainEvent]:
-        """Returns the list of pending events in the aggregate and clears pending events"""
-        events = self._pending_events
-        self.clear_events()
-        return events
 
     @staticmethod
     @abstractmethod
     def create_id(*args, **kwargs) -> str:
         """
         Reimplement to create ID of the aggregate.
-        Aggregate ID MUST BE UNIQUE accross the same aggregate type.
+        Please note that aggregate ID MUST BE GLOBALLY UNIQUE and no other aggregate accross the service should not
+        share the same aggregate_id.
+
+        .. warning::
+
+            After defining the ``create_id`` method, be very careful when changing it.
+            If your changes lead to the creation of a different aggregate ID with the same parameters, then you
+            will not be able to reconstruct your previously saved aggregate from the event store.
+
         """
         raise NotImplementedError
 
-    @staticmethod
     @abstractmethod
-    def get_aggregate_type() -> str:
+    def get_event_handler_routing(self) -> Dict[Type['Aggregate.AggrgateEvent'], Callable]:
         """
-        Aggregate type should be defined during modelling stage and MUST NOT BE CHANGED during the entire aggregate lifecycle.
-        It is used by repository to retreive specific aggregate instances and by event store as prefix to event stream.
+        Each event, generated by the aggregate leads to the change of state of the aggregate. Event handlers are the components
+        that are responsible for the change of state, these are simple methods defined on the aggregate that accept
+        domain event as input and changes the aggregate's state using event's parameters.
+
+        IMPORTANT - event handler only change the state of the aggregate, they DO NOT validate fields or execute
+        business logic.
+
+        This class have to be reimplemented to provide the routing from event to the corresponding event handler,
+        for example:
+
+            def event_handler_routing(self):
+                routing = {
+                    self.NameChanged: self._when_name_changed,
+                    self.Blocked: self._when_blocked
+                }
+                return routing
         """
         raise NotImplementedError
 
-    def mutate(self, event: DomainEvent) -> None:
+    def mutate(self, message: DomainMessage) -> None:
         """
-        Performs validation of the event and changes the state of the aggregate by calling 'apply_event'.
-        After application of the event modifies the version and modification date of the aggregate.
-
-        Validation:
-            - Event.aggregate_id should be equal to Aggregate.id. Raises AggregateIdError if not.
-            - Event.aggregate_version should be EXACTLY ONE more than Aggregate.version. Raises AggregateVersionError if not.
+        The method is used by framework on aggregate reconstruction stage and should not be called directly.
         """
-        # Event MUST belong to the aggregate
-        if self.aggregate_id != event.metadata.aggregate_id:
-            raise AggregateIDMismatch(f'ERROR - {event.__class__.__qualname__} aggregate_id does not match Aggregate ID attribute.')
-        # Version of the new event MUST BE EXACTLY ONE MORE than the current aggegate version
-        if (event.metadata.aggregate_version - self.aggregate_version) != 1:
-            raise AggregateVersionError(f'ERROR - event aggregate version should be exactly one more than the aggregate version.')
+        if not isinstance(message.event, self.AggrgateEvent):
+            raise TypeError(
+                f'Failed to mutate aggregate {self.__class__.__qualname__} with event {message.event.__class__.__qualname__}: '
+                f'the event must be a subclass of <Aggregate.AggrgateEvent> class'
+            )
+        self.apply_event(event=message.event)
+        self._aggregate_version = message.metadata.aggregate_version
+        self._original_version = message.metadata.aggregate_version
 
-        # Change the state of Aggregate
+    def trigger_event(self, event: DomainEvent) -> None:
+        """
+        This method must be called every time the new event is created. In general, aggregates can contain methods
+        that fullfill the specific business logic, for example, if Customer can be blocked, then there should be
+        a `block` method defined on the Customer aggregate.
+
+        When this method is executed it first should validate the input, execute the business logic and create the new
+        event, that describes what have happened, in our example it is `Blocked` event. After the event is created
+        it should be triggered using `trigger_event` method. It changes the state of aggregate, wraps the event in
+        `PendingEvent` class and adds it to the list of pending events that will be serialized in event store when
+        the aggreate is saved.
+        """
+        if not isinstance(event, self.AggrgateEvent):
+            raise TypeError(
+                f'Failed to trigger event {event.__class__.__qualname__}: '
+                f'the event must be a subclass of <Aggregate.AggrgateEvent> class'
+            )
+
         self.apply_event(event)
-
-        # Record new version and modification date
-        self._aggregate_version = event.metadata.aggregate_version
-        self._aggregate_modified_on = event.metadata.timestamp
-
-    def trigger_event(self, event: Event) -> None:
-        """
-        Should be called whenever new event occur during aggregate lifecycle.
-        Mutates aggregate state and adds event to the list of pending events
-        """
-        self.mutate(event)
-        self._pending_events.append(event)
+        self._aggregate_version = self.aggregate_version + 1
+        pending_event = PendingEvent(
+            aggregate_version=self.aggregate_version,
+            domain_event=event
+        )
+        self._pending_events.append(pending_event)

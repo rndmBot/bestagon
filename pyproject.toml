@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "bestagon"
-version = "0.8.0"
+version = "0.9.0"
 authors = [
   {name="Aleksandr Antonov", email="antonov.o779@gmail.com"},
 ]
@@ -14,8 +14,8 @@ requires-python = ">=3.10"
 license = "BSD-3-Clause"
 license-files = ["LICEN[CS]E*"]
 keywords = [
-    'DDD', 'Domain Driven Design', 'Event Sourcing', 'CQRS', 'Hexagonal Architecture', 'Microservices',
-    'Ports and Adapters', 'Event Driven Architecture', 'Aggregate'
+    'DDD', 'Domain Driven Design', 'AggrgateEvent Sourcing', 'CQRS', 'Hexagonal Architecture', 'Microservices',
+    'Ports and Adapters', 'AggrgateEvent Driven Architecture', 'Aggregate'
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

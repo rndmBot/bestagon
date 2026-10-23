@@ -1,19 +1,20 @@
 from dataclasses import dataclass
 from datetime import date
+from typing import Dict, Type, Callable
 from uuid import uuid5, NAMESPACE_URL
 
-from bestagon.core.aggregate import Aggregate, DomainEvent, DomainEventMetadata
+from bestagon.core.aggregate import Aggregate
 from bestagon.core.exceptions import DomainException
-from bestagon.core.mapper import register_aggregate_type, register_event_type
+from bestagon.core.registry import register_aggregate_type, register_event_type
 
 
-@register_aggregate_type()
+@register_aggregate_type('bond')
 class Bond(Aggregate):
 
     # Events are defined as nested classes to keep things in order
     @dataclass(frozen=True)
     @register_event_type('BondIssued')
-    class Issued(Aggregate.Created):
+    class Issued(Aggregate.AggregateCreated):
         isin: str
         issue_date: str
         maturity_date: str
@@ -25,18 +26,18 @@ class Bond(Aggregate):
 
     @dataclass(frozen=True)
     @register_event_type('BondDaysToMaturityChanged')
-    class DaysToMaturityChanged(Aggregate.Event):
+    class DaysToMaturityChanged(Aggregate.AggrgateEvent):
         isin: str
         old_days_to_maturity: int
         new_days_to_maturity: int
 
     @dataclass(frozen=True)
     @register_event_type('BondMatured')
-    class Matured(Aggregate.Event):
+    class Matured(Aggregate.AggrgateEvent):
         isin: str
 
-    def __init__(self, event: Issued):
-        super().__init__(event)
+    def __init__(self, event: Issued, aggregate_id: str, aggregate_version: int):
+        super().__init__(event=event, aggregate_id=aggregate_id, aggregate_version=aggregate_version)
 
         # It is a good practice to make attributes private to protect them from occasional change
         self._isin = event.isin
@@ -105,25 +106,43 @@ class Bond(Aggregate):
     def _when_matured(self, event: Matured) -> None:
         self._matured = True
 
-    def apply_event(self, event: DomainEvent) -> None:
-        event_routing = {
-            self.DaysToMaturityChanged: self._when_days_to_maturity_changed,
-            self.Matured: self._when_matured,
-        }
-        event_handler = event_routing.get(type(event))
-        if event_handler is not None:
-            event_handler(event)
-        else:
-            super().apply_event(event)
-
     @staticmethod
     def create_id(isin: str) -> str:
         aggregate_uid = uuid5(NAMESPACE_URL, isin)
         return str(aggregate_uid)
 
-    @staticmethod
-    def get_aggregate_type() -> str:
-        return 'bond'
+    def get_event_handler_routing(self) -> Dict[Type['Aggregate.AggrgateEvent'], Callable]:
+        routing = {
+            self.DaysToMaturityChanged: self._when_days_to_maturity_changed,
+            self.Matured: self._when_matured
+        }
+        return routing
+
+    @classmethod
+    def issue(
+            cls,
+            isin: str,
+            issue_date: str,
+            maturity_date: str,
+            maturity_segment: int,
+            issue_amount: float,
+            coupon: float,
+            coupon_frequency: int,
+            day_count_convention: str,
+    ) -> 'Bond':
+        aggregate_id = cls.create_id(isin=isin)
+        event = cls.Issued(
+            isin=isin,
+            issue_date=issue_date,
+            maturity_date=maturity_date,
+            maturity_segment=maturity_segment,
+            issue_amount=issue_amount,
+            coupon=coupon,
+            coupon_frequency=coupon_frequency,
+            day_count_convention=day_count_convention
+        )
+        obj = cls.create_aggregate(event=event, aggregate_id=aggregate_id)
+        return obj
 
     def set_matured(self) -> None:
         if self.matured:
@@ -132,14 +151,7 @@ class Bond(Aggregate):
         if self.days_to_maturity != 0:
             raise DomainException('Only bonds with days to maturity of 0 can be matured')
 
-        metadata = DomainEventMetadata(
-            timestamp=DomainEventMetadata.create_timestamp(),
-            aggregate_id=self.aggregate_id,
-            aggregate_version=self.next_version,
-            aggregate_type=self.get_aggregate_type()
-        )
         event = self.Matured(
-            metadata=metadata,
             isin=str(self.isin)
         )
         self.trigger_event(event)
@@ -155,14 +167,7 @@ class Bond(Aggregate):
         if self.days_to_maturity == new_days_to_maturity:
             return
 
-        metadata = DomainEventMetadata(
-            timestamp=DomainEventMetadata.create_timestamp(),
-            aggregate_id=self.aggregate_id,
-            aggregate_version=self.next_version,
-            aggregate_type=self.get_aggregate_type()
-        )
         event = self.DaysToMaturityChanged(
-            metadata=metadata,
             isin=str(self.isin),
             old_days_to_maturity=self.days_to_maturity,
             new_days_to_maturity=new_days_to_maturity

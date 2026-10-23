@@ -1,17 +1,29 @@
+import datetime
 import logging
-from itertools import pairwise
-from typing import List, Tuple
+from typing import List, Union, Type
+from uuid import uuid4
 
-from bestagon.core.aggregate import Aggregate, DomainEvent
-from bestagon.core.mapper import mapper
+from bestagon.core.aggregate import Aggregate
 from bestagon.core.event_store import EventStore
-from bestagon.core.exceptions import AggregateNotFoundError, AggregateVersionError
+from bestagon.core.exceptions import BestagonError
+from bestagon.core.mapper import to_domain_message, to_new_event_store_event
+from bestagon.core.message import DomainMessage, CommandMessage, DomainEventMetadata
+from bestagon.core.registry import aggregate_type_registry
 
 logger = logging.getLogger(__name__)
 
 
+class AggregateReconstructionError(BestagonError):
+    pass
+
+
+class AggregateNotFoundError(BestagonError):
+    pass
+
+
 class EventSourcedRepository:
-    # TODO - logging
+    # TODO - the repository should provide a way to define how exactly stream name will be constructed
+
     def __init__(self, event_store: EventStore):
         self._event_store = event_store
 
@@ -19,82 +31,95 @@ class EventSourcedRepository:
     def event_store(self) -> EventStore:
         return self._event_store
 
-    @staticmethod
-    def _create_stream_name(aggregate_type: str, aggregate_id: str) -> str:
-        return f'{aggregate_type}-{aggregate_id}'
+    async def contains(self, aggregate_id: str) -> bool:
+        return await self.event_store.stream_exists(stream_name=aggregate_id)
 
-    @staticmethod
-    def _validate_events(events: Tuple[DomainEvent, ...]) -> None:
-        # Events cannot be empty list
-        if not events:
-            raise ValueError(
-                f'Events validation failed - events should be a non empty list of {DomainEvent.__class__.__qualname__} instances.'
+    async def get_by_id(self, aggregate_id: str) -> Aggregate:
+        if not await self.event_store.stream_exists(aggregate_id):
+            raise AggregateNotFoundError(
+                f'Failed to retrieve aggregate: aggregate with ID {aggregate_id} not found.'
             )
 
-        # Events should be a list of DomainEvent class
-        if not all([isinstance(event, DomainEvent) for event in events]):
-            raise TypeError(
-                f'Events validation failed - all appended events should be instances of {DomainEvent.__class__.__qualname__} class.'
+        event_store_events = await self.event_store.get_stream(stream_name=aggregate_id)
+        if not event_store_events:
+            raise AggregateNotFoundError(
+                f'Failed to retrieve aggregate: aggregate with ID {aggregate_id} not found.'
             )
 
-        # Event versions should be monotonically increasing
-        stream_positions = [event.metadata.aggregate_version for event in events]
-        diffs = [y - x for x, y in pairwise(stream_positions)]
-        gapless = all([True if d == 1 else False for d in diffs])
-        if not gapless:
-            raise AggregateVersionError(
-                'Events validation failed - aggregate verions of events should be a monotonically increasing sequence of integers, '
-                f'provided events contain events out of order or/and events with gaps in aggregate version: {stream_positions}'
-            )
+        domain_messages: List[DomainMessage] = list()
+        for event_store_event in event_store_events:
+            domain_message = to_domain_message(event_store_event=event_store_event)
+            domain_messages.append(domain_message)
 
-    async def contains(self, aggregate_type: str, aggregate_id: str) -> bool:
-        stream_id = self._create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
-        return await self.event_store.stream_exists(stream_name=stream_id)
-
-    async def get_by_id(self, aggregate_type: str, aggregate_id: str) -> Aggregate:
-        domain_events: List[DomainEvent] = list()
-        stream_name = self._create_stream_name(aggregate_type=aggregate_type, aggregate_id=aggregate_id)
-        if not await self.event_store.stream_exists(stream_name):
-            raise AggregateNotFoundError(f'Aggregate {aggregate_id} not found.')
-
-        stored_events = await self.event_store.get_stream(stream_name=stream_name)
-        if not stored_events:
-            raise AggregateNotFoundError(f'Aggregate {aggregate_id} not found.')
-
-        for stored_event in stored_events:
-            domain_event = mapper.to_domain_event(stream_event=stored_event)
-            domain_events.append(domain_event)
-
-        aggregate = self.reconstruct_aggregate(events=domain_events)
+        aggregate = self.reconstruct_aggregate(messages=domain_messages)
         return aggregate
 
     @staticmethod
-    def reconstruct_aggregate(events: List[DomainEvent]) -> Aggregate:
-        created = events.pop(0)
-        if not isinstance(created, Aggregate.Created):
-            raise TypeError(f'Invalid event type, expected instance of class <Aggregate.Created>, got {type(created)}')
+    def reconstruct_aggregate(messages: List[DomainMessage]) -> Aggregate:
+        first_message = messages.pop(0)
 
-        aggregate_class = mapper.get_aggregate_class(aggregate_type=created.metadata.aggregate_type)
-        aggregate = aggregate_class(created)
-        for event in events:
-            aggregate.mutate(event)
-        return aggregate
+        # TODO - is it really necessary to check the first event?
+        if not isinstance(first_message.event, Aggregate.AggregateCreated):
+            raise AggregateReconstructionError(
+                f'Failed to reconstruct aggregate: '
+                f'the first event must be an instance of <Aggregate.AggregateCreated> class, got {type(first_message.event)}'
+            )
 
-    async def save(self, aggregate: Aggregate) -> None:
-        events = aggregate.pending_events
-        if not events:
-            return
-        self._validate_events(events=events)
-
-        last_event_version = events[0].metadata.aggregate_version
-        expected_version = None if last_event_version == 0 else last_event_version - 1
-        stream_name = self._create_stream_name(aggregate_type=aggregate.get_aggregate_type(), aggregate_id=aggregate.aggregate_id)
-
-        new_stored_events = tuple(
-            mapper.to_new_event_store_event(domain_event) for domain_event in aggregate.pending_events)
-        await self.event_store.append_events(
-            stream_name=stream_name,
-            events=new_stored_events,
-            expected_version=expected_version
+        aggregate_class: Type[Aggregate] = aggregate_type_registry.get_aggregate_class(first_message.metadata.aggregate_type)
+        aggregate: Aggregate = aggregate_class(
+            event=first_message.event,
+            aggregate_id=first_message.metadata.aggregate_id,
+            aggregate_version=first_message.metadata.aggregate_version
         )
-        aggregate.clear_events()
+        for message in messages:
+            aggregate.mutate(message)
+        return aggregate
+
+    async def save(self, aggregate: Aggregate, trigger_message: Union[DomainMessage, CommandMessage]) -> None:
+        logger.debug(f'Saving aggregate {aggregate.__class__.__qualname__} - {aggregate.aggregate_id}')
+        pending_events = aggregate.pending_events
+        if not pending_events:
+            logger.debug(f'No new events to save for aggregate {aggregate.__class__.__qualname__} - {aggregate.aggregate_id}')
+            return
+
+        messages: List[DomainMessage] = list()
+        for pending_event in pending_events:
+
+            # ----------------------------------------- #
+            # TODO - metadata creation process should be improved
+            #   as an idea it should be extracted to a separate component, for example MetadataFactory,
+            #   that will be responsible for creation, serialization and deserialization of metadata
+            if isinstance(trigger_message, DomainMessage):
+                causation_id = trigger_message.metadata.event_id
+            elif isinstance(trigger_message, CommandMessage):
+                causation_id = trigger_message.metadata.command_id
+            else:
+                raise TypeError(f'Invalid trigger message type: {type(trigger_message)}')
+
+            metadata = DomainEventMetadata(
+                timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
+                event_id=str(uuid4()),
+                event_type=pending_event.domain_event.event_type,
+                aggregate_id=aggregate.aggregate_id,
+                aggregate_version=pending_event.aggregate_version,
+                aggregate_type=aggregate.aggregate_type,
+
+                correlation_id=trigger_message.metadata.correlation_id,
+                causation_id=causation_id
+            )
+            # ----------------------------------------- #
+
+            message = DomainMessage(
+                event=pending_event.domain_event,
+                metadata=metadata
+            )
+            messages.append(message)
+
+        new_event_store_events = tuple(to_new_event_store_event(message) for message in messages)
+        await self.event_store.append_events(
+            stream_name=aggregate.aggregate_id,
+            events=new_event_store_events,
+            expected_version=aggregate.original_version
+        )
+        aggregate.clear_pending_events()
+        logger.debug(f'Aggregate {aggregate.aggregate_id} successfully saved in repository.')

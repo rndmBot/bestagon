@@ -2,15 +2,11 @@ class BestagonError(Exception):
     pass
 
 
-class DomainException(BestagonError):
+class AggregateTypeAlreadyRegisteredError(BestagonError):
     pass
 
 
-class AggregateNotFoundError(BestagonError):
-    pass
-
-
-class AggregateIDMismatch(BestagonError):
+class AggregateTypeNotRegisteredError(BestagonError):
     pass
 
 
@@ -18,21 +14,37 @@ class AggregateVersionError(BestagonError):
     pass
 
 
-class IntegrityError(BestagonError):
+class CommandHandlerAlreadyRegisteredError(BestagonError):
     pass
 
 
-class HandlerNotFound(BestagonError):
+class CommandHandlerNotRegisteredError(BestagonError):
     pass
 
 
-class HandlerAlreadyRegistered(BestagonError):
+class DomainException(BestagonError):
     pass
 
 
-class TypeNotRegisteredError(BestagonError):
+class EventTypeAlreadyRegisteredError(BestagonError):
     pass
 
 
-class TypeAlreadyRegisteredError(BestagonError):
+class EventTypeNotRegisteredError(BestagonError):
+    pass
+
+
+class EventHandlerAlreadyRegisteredError(BestagonError):
+    pass
+
+
+class EventHandlerNotRegisteredError(BestagonError):
+    pass
+
+
+class QueryHandlerAlreadyRegisteredError(BestagonError):
+    pass
+
+
+class QueryHandlerNotRegisteredError(BestagonError):
     pass
