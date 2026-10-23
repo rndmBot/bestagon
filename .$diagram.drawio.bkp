@@ -7,7 +7,7 @@
         <mxCell id="jhlZS2E9L5Ramib78ECQ-4" parent="1" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Checkpoint Store" vertex="1">
           <mxGeometry height="60" width="60" x="1200" y="650" as="geometry" />
         </mxCell>
-        <mxCell id="jhlZS2E9L5Ramib78ECQ-62" parent="1" style="swimlane;startSize=20;horizontal=1;containerType=tree;newEdgeStyle={&quot;edgeStyle&quot;:&quot;elbowEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;};fillStyle=auto;swimlaneFillColor=#F6F6F6;" value="AggrgateEvent Store Part" vertex="1">
+        <mxCell id="jhlZS2E9L5Ramib78ECQ-62" parent="1" style="swimlane;startSize=20;horizontal=1;containerType=tree;newEdgeStyle={&quot;edgeStyle&quot;:&quot;elbowEdgeStyle&quot;,&quot;startArrow&quot;:&quot;none&quot;,&quot;endArrow&quot;:&quot;none&quot;};fillStyle=auto;swimlaneFillColor=#F6F6F6;" value="AggregateEvent Store Part" vertex="1">
           <mxGeometry height="450" width="800" x="-375" y="-370" as="geometry">
             <mxRectangle height="30" width="90" x="490" y="505" as="alternateBounds" />
           </mxGeometry>
@@ -20,7 +20,7 @@
             <mxPoint x="1" y="1" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="jhlZS2E9L5Ramib78ECQ-3" parent="jhlZS2E9L5Ramib78ECQ-62" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="AggrgateEvent Store" vertex="1">
+        <mxCell id="jhlZS2E9L5Ramib78ECQ-3" parent="jhlZS2E9L5Ramib78ECQ-62" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="AggregateEvent Store" vertex="1">
           <mxGeometry height="60" width="60" x="275" y="130" as="geometry" />
         </mxCell>
         <mxCell id="jhlZS2E9L5Ramib78ECQ-35" edge="1" parent="jhlZS2E9L5Ramib78ECQ-62" source="jhlZS2E9L5Ramib78ECQ-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;curved=1;" target="jhlZS2E9L5Ramib78ECQ-3">
@@ -31,7 +31,7 @@
             <mxPoint x="-7" y="1" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="jhlZS2E9L5Ramib78ECQ-5" parent="jhlZS2E9L5Ramib78ECQ-62" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.multi-document;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" value="Stream AggrgateEvent" vertex="1">
+        <mxCell id="jhlZS2E9L5Ramib78ECQ-5" parent="jhlZS2E9L5Ramib78ECQ-62" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.multi-document;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" value="Stream AggregateEvent" vertex="1">
           <mxGeometry height="50" width="73.33" x="370" y="380" as="geometry" />
         </mxCell>
         <mxCell id="jhlZS2E9L5Ramib78ECQ-31" edge="1" parent="jhlZS2E9L5Ramib78ECQ-62" source="jhlZS2E9L5Ramib78ECQ-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;curved=1;" target="jhlZS2E9L5Ramib78ECQ-3">
@@ -42,7 +42,7 @@
             <mxPoint y="-10" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="jhlZS2E9L5Ramib78ECQ-6" parent="jhlZS2E9L5Ramib78ECQ-62" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.multi-document;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" value="New Stream AggrgateEvent" vertex="1">
+        <mxCell id="jhlZS2E9L5Ramib78ECQ-6" parent="jhlZS2E9L5Ramib78ECQ-62" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.multi-document;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" value="New Stream AggregateEvent" vertex="1">
           <mxGeometry height="50" width="73.33" x="20" y="230" as="geometry" />
         </mxCell>
         <mxCell id="jhlZS2E9L5Ramib78ECQ-37" edge="1" parent="jhlZS2E9L5Ramib78ECQ-62" source="jhlZS2E9L5Ramib78ECQ-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.7;entryDx=0;entryDy=0;curved=1;" target="jhlZS2E9L5Ramib78ECQ-3">
@@ -122,7 +122,7 @@
             <mxPoint x="7" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="jhlZS2E9L5Ramib78ECQ-70" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.multi-document;whiteSpace=wrap;fillColor=#fad7ac;strokeColor=#b46504;" value="Domain AggrgateEvent" vertex="1">
+        <mxCell id="jhlZS2E9L5Ramib78ECQ-70" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.multi-document;whiteSpace=wrap;fillColor=#fad7ac;strokeColor=#b46504;" value="Domain AggregateEvent" vertex="1">
           <mxGeometry height="50" width="73.33" x="83.34" y="630" as="geometry" />
         </mxCell>
         <mxCell id="jhlZS2E9L5Ramib78ECQ-81" edge="1" parent="1" source="jhlZS2E9L5Ramib78ECQ-77" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.75;entryDx=0;entryDy=0;curved=1;" target="jhlZS2E9L5Ramib78ECQ-80">

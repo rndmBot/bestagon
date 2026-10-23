@@ -43,7 +43,7 @@ class NewEventStoreEvent(BaseModel):
 @dataclass(frozen=True)
 class EventStoreEvent:
     """
-    AggrgateEvent store events represent events that already saved in the event store. Every time you retrieve events from
+    AggregateEvent store events represent events that already saved in the event store. Every time you retrieve events from
     event store, they are returned in the form of EventStoreEvent.
 
     Fields:
@@ -255,7 +255,7 @@ class EventStore(ABC):
     @abstractmethod
     async def initialize(self) -> None:
         """
-        AggrgateEvent store can require additional actions after instantiation, for example to create a table for
+        AggregateEvent store can require additional actions after instantiation, for example to create a table for
         events if you use SQL database as an underlying technology. In such cases this method can be reimplemented
         to provide necvessary setup.
         """

@@ -21,11 +21,11 @@ class Counter(Aggregate):
 
     @dataclass(frozen=True)
     @register_event_type('test-CounterIncremented')
-    class Incremented(Aggregate.AggrgateEvent):
+    class Incremented(Aggregate.AggregateEvent):
         amount: int = 1
 
     @dataclass(frozen=True)
-    class Unrouted(Aggregate.AggrgateEvent):
+    class Unrouted(Aggregate.AggregateEvent):
         """An event that is deliberately left out of `get_event_handler_routing`."""
         pass
 
@@ -46,7 +46,7 @@ class Counter(Aggregate):
         event = cls.Opened(start=start)
         return cls.create_aggregate(event=event, aggregate_id=cls.create_id(name=name))
 
-    def get_event_handler_routing(self) -> Dict[Type[Aggregate.AggrgateEvent], Callable]:
+    def get_event_handler_routing(self) -> Dict[Type[Aggregate.AggregateEvent], Callable]:
         return {self.Incremented: self._when_incremented}
 
     def _when_incremented(self, event: 'Counter.Incremented') -> None:
@@ -151,13 +151,13 @@ class TestTriggerEvent:
     def test_rejects_an_aggregate_created_event(self):
         counter = Counter.open()
 
-        with pytest.raises(TypeError, match='must be a subclass of <Aggregate.AggrgateEvent>'):
+        with pytest.raises(TypeError, match='must be a subclass of <Aggregate.AggregateEvent>'):
             counter.trigger_event(Counter.Opened())
 
     def test_rejects_a_bare_domain_event(self):
         counter = Counter.open()
 
-        with pytest.raises(TypeError, match='must be a subclass of <Aggregate.AggrgateEvent>'):
+        with pytest.raises(TypeError, match='must be a subclass of <Aggregate.AggregateEvent>'):
             counter.trigger_event(DomainEvent())
 
     def test_an_unrouted_event_leaves_the_aggregate_unchanged(self):
@@ -229,7 +229,7 @@ class TestMutate:
     def test_rejects_an_aggregate_created_event(self):
         counter = Counter.open()
 
-        with pytest.raises(TypeError, match='must be a subclass of <Aggregate.AggrgateEvent>'):
+        with pytest.raises(TypeError, match='must be a subclass of <Aggregate.AggregateEvent>'):
             counter.mutate(message(event=Counter.Opened(), aggregate_version=1))
 
     def test_replays_a_sequence_of_events(self):
@@ -323,7 +323,7 @@ class TestAbstractContract:
 
     def test_an_aggregate_without_an_id_factory_cannot_be_instantiated(self):
         class NoIdFactory(Aggregate):
-            def get_event_handler_routing(self) -> Dict[Type[Aggregate.AggrgateEvent], Callable]:
+            def get_event_handler_routing(self) -> Dict[Type[Aggregate.AggregateEvent], Callable]:
                 return {}
 
         with pytest.raises(TypeError, match='create_id'):
