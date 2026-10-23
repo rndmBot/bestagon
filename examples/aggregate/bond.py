@@ -26,14 +26,14 @@ class Bond(Aggregate):
 
     @dataclass(frozen=True)
     @register_event_type('BondDaysToMaturityChanged')
-    class DaysToMaturityChanged(Aggregate.AggrgateEvent):
+    class DaysToMaturityChanged(Aggregate.AggregateEvent):
         isin: str
         old_days_to_maturity: int
         new_days_to_maturity: int
 
     @dataclass(frozen=True)
     @register_event_type('BondMatured')
-    class Matured(Aggregate.AggrgateEvent):
+    class Matured(Aggregate.AggregateEvent):
         isin: str
 
     def __init__(self, event: Issued, aggregate_id: str, aggregate_version: int):
@@ -111,7 +111,7 @@ class Bond(Aggregate):
         aggregate_uid = uuid5(NAMESPACE_URL, isin)
         return str(aggregate_uid)
 
-    def get_event_handler_routing(self) -> Dict[Type['Aggregate.AggrgateEvent'], Callable]:
+    def get_event_handler_routing(self) -> Dict[Type['Aggregate.AggregateEvent'], Callable]:
         routing = {
             self.DaysToMaturityChanged: self._when_days_to_maturity_changed,
             self.Matured: self._when_matured

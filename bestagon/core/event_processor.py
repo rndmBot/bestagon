@@ -109,7 +109,7 @@ class EventProcessor(ABC):
 
     async def subscribe_to(self, event_store: EventStore) -> None:
         if self.subscription is not None:
-            logger.info(f'AggrgateEvent processor {self.name} already have a running subscription.')
+            logger.info(f'AggregateEvent processor {self.name} already have a running subscription.')
             return
 
         event_types = list()
@@ -118,7 +118,7 @@ class EventProcessor(ABC):
             event_types.extend(types)
 
         if not event_types:
-            logger.warning(f'Subscription cancelled. AggrgateEvent processor {self.name} have no declared events to listen to.')
+            logger.warning(f'Subscription cancelled. AggregateEvent processor {self.name} have no declared events to listen to.')
             return
 
         subscription_name = self.get_subscription_name()
@@ -131,7 +131,7 @@ class EventProcessor(ABC):
 
         self._subscription = subscription
         self._subscription_task = asyncio.create_task(self._consume_subscription(), name=f'{self.name}_subscription_task')
-        logger.info(f'AggrgateEvent processor {self.name} subscribed to event store.')
+        logger.info(f'AggregateEvent processor {self.name} subscribed to event store.')
 
 
 class Application(EventProcessor):
