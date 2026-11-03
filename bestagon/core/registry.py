@@ -244,7 +244,9 @@ query_handler_registry = QueryHandlerRegistry()
 
 
 def register_aggregate_type(aggregate_type: str):
-    # TODO - docsting
+    """
+    Registers canonic aggregate type for the aggregate.
+    """
     def decorator(cls: Type[Aggregate]) -> Type[Aggregate]:
         aggregate_type_registry.register_canonic_aggregate_type(aggregate_type=aggregate_type, aggregate_class=cls)
         return cls
@@ -252,7 +254,9 @@ def register_aggregate_type(aggregate_type: str):
 
 
 def register_event_type(event_type: str):
-    # TODO - docstring
+    """
+    Registers canonic event type for the event.
+    """
     def decorator(cls: Type[DomainEvent]) -> Type[DomainEvent]:
         event_type_registry.register_legacy_event_type(event_type=event_type, event_class=cls)
         return cls
