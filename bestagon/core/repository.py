@@ -76,11 +76,12 @@ class EventSourcedRepository:
         return aggregate
 
     async def save(self, aggregate: Aggregate, trigger_message: Union[DomainMessage, CommandMessage]) -> None:
-        logger.debug(f'Saving aggregate {aggregate.__class__.__qualname__} - {aggregate.aggregate_id}')
         pending_events = aggregate.pending_events
         if not pending_events:
             logger.debug(f'No new events to save for aggregate {aggregate.__class__.__qualname__} - {aggregate.aggregate_id}')
             return
+
+        logger.debug(f'Saving aggregate {aggregate.__class__.__qualname__} - {aggregate.aggregate_id}')
 
         messages: List[DomainMessage] = list()
         for pending_event in pending_events:

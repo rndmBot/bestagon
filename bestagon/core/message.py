@@ -19,7 +19,7 @@ class DomainEvent:
         cls._EVENT_TYPE = None
 
     @property
-    def event_type(self) -> str:
+    def event_type(self) -> str:  # TODO - rename it to domain_event_type to reduce colision chance?
         if not self._EVENT_TYPE:
             raise EventTypeNotRegisteredError(
                 f'Failed to retrieve event type for event {self.__class__.__qualname__}: event type is not registered, '

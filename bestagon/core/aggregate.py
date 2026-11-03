@@ -6,11 +6,6 @@ from bestagon.core.exceptions import AggregateTypeNotRegisteredError, EventHandl
 from bestagon.core.message import DomainEvent, DomainMessage
 
 
-# TODO - future improvements:
-#   1. Improve event handler registration, ideally with @event_handler decorator
-#   2. The inheritance mechanism should be reviewed: how exactly children should inherit events and reregister types?
-
-
 @dataclass(frozen=True)
 class PendingEvent:
     """
@@ -24,9 +19,12 @@ class PendingEvent:
 class Aggregate(ABC):
     """
     The base class for event-sourced aggregtes.
+
+    .. note:
+        TODO - document that aggregate and event type registration is a deliberate behavior because it is explicit
     """
 
-    _AGGREGATE_TYPE = None
+    _AGGREGATE_TYPE = None  # Registry is not used because multiple aggregate types can be registered for single aggregate class
     INITIAL_VERSION = 0
 
     @dataclass(frozen=True)
@@ -51,7 +49,6 @@ class Aggregate(ABC):
         self._aggregate_id = aggregate_id
         self._aggregate_version = aggregate_version
         self._original_version = aggregate_version
-
         self._pending_events: List[PendingEvent] = list()
 
     def __init_subclass__(cls, **kwargs):
@@ -66,6 +63,23 @@ class Aggregate(ABC):
         """
         super().__init_subclass__(**kwargs)
         cls._AGGREGATE_TYPE = None
+
+        # TODO - document - all events must be redefined and reregistered for each subclass
+        for base in cls.__mro__[1:]:
+            if base is Aggregate or not issubclass(base, Aggregate):
+                continue
+            for name, attr in vars(base).items():
+                if (
+                        isinstance(attr, type)
+                        and issubclass(attr, DomainEvent)
+                        and name not in vars(cls)
+                ):
+                    # TODO - rewrite exception
+                    raise TypeError(
+                        f'{cls.__qualname__} inherits event "{name}" from {base.__qualname__}. '
+                        f'Events are bound to the aggregate that defines them, '
+                        f'redefine "{name}" in {cls.__qualname__}.'
+                    )
 
     @property
     def aggregate_id(self) -> str:
@@ -194,6 +208,7 @@ class Aggregate(ABC):
                 }
                 return routing
         """
+        # TODO - document - solves the event inheritance problem
         raise NotImplementedError
 
     def mutate(self, message: DomainMessage) -> None:
