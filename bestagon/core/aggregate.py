@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Callable, Type
 
-from bestagon.core.exceptions import AggregateTypeNotRegisteredError, EventHandlerNotRegisteredError
+from bestagon.core.exceptions import EventHandlerNotRegisteredError
 from bestagon.core.message import DomainEvent, DomainMessage
 
 
@@ -19,12 +19,8 @@ class PendingEvent:
 class Aggregate(ABC):
     """
     The base class for event-sourced aggregtes.
-
-    .. note:
-        TODO - document that aggregate and event type registration is a deliberate behavior because it is explicit
     """
 
-    _AGGREGATE_TYPE = None  # Registry is not used because multiple aggregate types can be registered for single aggregate class
     INITIAL_VERSION = 0
 
     @dataclass(frozen=True)
@@ -62,8 +58,6 @@ class Aggregate(ABC):
         on serialization state instead of silently corrupting the data.
         """
         super().__init_subclass__(**kwargs)
-        cls._AGGREGATE_TYPE = None
-
         # TODO - document - all events must be redefined and reregistered for each subclass
         for base in cls.__mro__[1:]:
             if base is Aggregate or not issubclass(base, Aggregate):
@@ -84,19 +78,6 @@ class Aggregate(ABC):
     @property
     def aggregate_id(self) -> str:
         return self._aggregate_id
-
-    @property
-    def aggregate_type(self) -> str:
-        if not self._AGGREGATE_TYPE:
-            raise AggregateTypeNotRegisteredError(
-                f'No aggregate type is registered for aggregate {self.__class__.__qualname__}, '
-                f'register the aggregate type with `register_aggregate_type` decorator to fix this problem, '
-                f'for example:\n'
-                f'@register_aggregate_type("customer")\n'
-                f'class Customer(Aggregate):\n'
-                f'  ....'
-            )
-        return self._AGGREGATE_TYPE
 
     @property
     def aggregate_version(self) -> int:

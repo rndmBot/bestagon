@@ -8,7 +8,7 @@ from bestagon.core.event_store import EventStore
 from bestagon.core.exceptions import BestagonError
 from bestagon.core.mapper import to_domain_message, to_new_event_store_event
 from bestagon.core.message import DomainMessage, CommandMessage, DomainEventMetadata
-from bestagon.core.registry import aggregate_type_registry
+from bestagon.core.registry import aggregate_type_registry, event_type_registry
 
 logger = logging.getLogger(__name__)
 
@@ -100,10 +100,10 @@ class EventSourcedRepository:
             metadata = DomainEventMetadata(
                 timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
                 event_id=str(uuid4()),
-                event_type=pending_event.domain_event.event_type,
+                event_type=event_type_registry.get_canonic_event_type(type(pending_event.domain_event)),
                 aggregate_id=aggregate.aggregate_id,
                 aggregate_version=pending_event.aggregate_version,
-                aggregate_type=aggregate.aggregate_type,
+                aggregate_type=aggregate_type_registry.get_canonic_aggregate_type(type(aggregate)),
 
                 correlation_id=trigger_message.metadata.correlation_id,
                 causation_id=causation_id
