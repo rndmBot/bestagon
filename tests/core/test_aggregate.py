@@ -4,7 +4,7 @@ from typing import Callable, Dict, Type
 import pytest
 
 from bestagon.core.aggregate import Aggregate, PendingEvent
-from bestagon.core.exceptions import AggregateTypeNotRegisteredError, EventHandlerNotRegisteredError
+from bestagon.core.exceptions import EventHandlerNotRegisteredError
 from bestagon.core.message import DomainEvent, DomainEventMetadata, DomainMessage
 from bestagon.core.registry import register_aggregate_type, register_event_type
 
@@ -279,32 +279,55 @@ class TestPendingEvents:
             counter.pending_events[0].aggregate_version = 99
 
 
-class TestAggregateType:
-    def test_returns_the_registered_aggregate_type(self):
-        counter = Counter.open()
+class TestEventOwnership:
+    """
+    An aggregate no longer carries its own type, so the inheritance hazard it used to guard against is
+    now headed off one step earlier: a subclass cannot quietly reuse its parent's event classes.
+    Resolving a class to its aggregate type is the registry's job, covered in `test_registry.py`.
+    """
 
-        assert counter.aggregate_type == 'test-counter'
+    def test_a_subclass_cannot_silently_inherit_an_event(self):
+        with pytest.raises(TypeError, match='inherits event "Opened" from Counter'):
+            class SilentCounter(Counter):
+                pass
 
-    def test_a_subclass_does_not_inherit_the_aggregate_type_of_its_parent(self):
-        # __init_subclass__ resets _AGGREGATE_TYPE so an unregistered child fails loudly instead of
-        # being persisted under its parent's type.
-        class UnregisteredCounter(Counter):
-            pass
+    def test_redefining_only_some_of_the_inherited_events_is_not_enough(self):
+        with pytest.raises(TypeError, match='inherits event "Incremented" from Counter'):
+            class PartialCounter(Counter):
+                @dataclass(frozen=True)
+                class Opened(Aggregate.AggregateCreated):
+                    start: int = 0
 
-        counter = UnregisteredCounter.open()
+    def test_a_subclass_that_redefines_every_inherited_event_is_accepted(self):
+        # The redefined events are deliberately left unregistered: this is about class creation,
+        # and registering them would leak into the process wide registry.
+        class RedefinedCounter(Counter):
+            @dataclass(frozen=True)
+            class Opened(Aggregate.AggregateCreated):
+                start: int = 0
 
-        with pytest.raises(AggregateTypeNotRegisteredError, match='No aggregate type is registered'):
-            counter.aggregate_type
+            @dataclass(frozen=True)
+            class Incremented(Aggregate.AggregateEvent):
+                amount: int = 1
 
-    def test_a_subclass_reports_its_own_registered_aggregate_type(self):
-        @register_aggregate_type('test-counter-child')
-        class ChildCounter(Counter):
-            pass
+            @dataclass(frozen=True)
+            class Unrouted(Aggregate.AggregateEvent):
+                pass
 
-        counter = ChildCounter.open()
+        assert RedefinedCounter.Opened is not Counter.Opened
+        assert RedefinedCounter.Incremented is not Counter.Incremented
 
-        assert counter.aggregate_type == 'test-counter-child'
-        assert Counter.open().aggregate_type == 'test-counter'
+    def test_the_events_defined_on_the_base_aggregate_are_exempt(self):
+        """`AggregateCreated` and `AggregateEvent` are the framework's own, every aggregate inherits them."""
+        class Standalone(Aggregate):
+            @staticmethod
+            def create_id(*args, **kwargs) -> str:
+                return 'standalone'
+
+            def get_event_handler_routing(self) -> Dict[Type[Aggregate.AggregateEvent], Callable]:
+                return {}
+
+        assert Standalone.AggregateCreated is Aggregate.AggregateCreated
 
 
 class TestAbstractContract:

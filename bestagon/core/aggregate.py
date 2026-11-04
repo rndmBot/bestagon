@@ -49,6 +49,7 @@ class Aggregate(ABC):
 
     def __init_subclass__(cls, **kwargs):
         """
+        # TODO - fix docstring, there is no event type now, but subclasses should redefine parent's events
         In your domain you can easily have aggregates that inherit from other aggregates, for example: Customer -> VIPCustomer.
         Such inheritance creates a dangerous situation when child inherits parent's aggregate type and, if child
         have not registered its own aggregate type using `register_aggregate_type` decorator, then parent's aggregate

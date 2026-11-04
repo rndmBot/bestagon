@@ -52,19 +52,19 @@ class AggregateTypeRegistry:
             registered_type = self._canonic_aggregate_type_map[aggregate_class]
             raise CanonicAggregateTypeAlreadyRegisteredError(
                 f'Failed to register canonic aggregate type {aggregate_type} for {aggregate_class}: '
-                f'the canonic aggergate type {registered_type} already registered for the class.'
+                f'the canonic aggregate type {registered_type} already registered for the class.'
             )
         if aggregate_type in self._inverse_canonic_map:
             registered_class = self._inverse_canonic_map[aggregate_type]
             raise CanonicAggregateTypeAlreadyRegisteredError(
                 f'Failed to register canonic aggregate type {aggregate_type} for {aggregate_class}: '
-                f'the canonic aggergate type already registered for the {registered_class}'
+                f'the canonic aggregate type already registered for the {registered_class}'
             )
         # Canonic aggregate type cannot be registered if it already registered as legacy
         if aggregate_type in self._legacy_aggregate_class_map:
             raise AggregateTypeAlreadyRegisteredError(
                 f'Failed to register canonic aggregate type {aggregate_type} for {aggregate_class}: '
-                f'the canonic aggergate type already registered as legacy aggregate type'
+                f'the canonic aggregate type already registered as legacy aggregate type'
             )
 
         self._canonic_aggregate_type_map[aggregate_class] = aggregate_type
@@ -89,14 +89,14 @@ class AggregateTypeRegistry:
             registered_class = self._legacy_aggregate_class_map[aggregate_type]
             raise LegacyAggregateTypeAlreadyRegisteredError(
                 f'Failed to register legacy aggregate type {aggregate_type} for {aggregate_class}: '
-                f'the legacy aggergate type already registered for the {registered_class} aggregate.'
+                f'the legacy aggregate type already registered for the {registered_class} aggregate.'
             )
 
-        # Legacy aggrgate type cannot be registered if it already registered as canonic
+        # Legacy aggregate type cannot be registered if it already registered as canonic
         if aggregate_type in self._inverse_canonic_map:
             raise AggregateTypeAlreadyRegisteredError(
                 f'Failed to register legacy aggregate type {aggregate_type} for {aggregate_class}: '
-                f'the aggergate type already registered as canonic aggregate type'
+                f'the aggregate type already registered as canonic aggregate type'
             )
 
         self._legacy_aggregate_class_map[aggregate_type] = aggregate_class
@@ -112,7 +112,7 @@ class EventTypeRegistry:
         if event_class in self._canonic_event_type_map:
             return self._canonic_event_type_map[event_class]
         raise CanonicEventTypeNotRegistered(
-            f'Fialed to retrieve canonic event type for event class {event_class.__qualname__}: '
+            f'Failed to retrieve canonic event type for event class {event_class.__qualname__}: '
             f'canonic event type is not registered'
         )
 
@@ -185,7 +185,7 @@ class EventTypeRegistry:
                 f'Failed to register legacy event type {event_type}: '
                 f'event type should be a non empty string'
             )
-        # Event type cannot be registered as legasy if it already registered as canonic
+        # Event type cannot be registered as legacy if it already registered as canonic
         if event_type in self._inverse_canonic_map:
             raise EventTypeAlreadyRegisteredError(
                 f'Failed to register legacy event type {event_type}: '
@@ -221,7 +221,7 @@ class CommandHandlerRegistry:
 
 
 class QueryHandlerRegistry:
-    # TODO - there should be a mechanism of automatic query hanlders registration
+    # TODO - there should be a mechanism of automatic query handlers registration
 
     def __init__(self):
         self._query_handler_map: Dict[Type[Query], Callable] = dict()
@@ -258,6 +258,6 @@ def register_event_type(event_type: str):
     Registers canonic event type for the event.
     """
     def decorator(cls: Type[DomainEvent]) -> Type[DomainEvent]:
-        event_type_registry.register_legacy_event_type(event_type=event_type, event_class=cls)
+        event_type_registry.register_canonic_event_type(event_type=event_type, event_class=cls)
         return cls
     return decorator
