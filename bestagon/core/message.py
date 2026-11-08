@@ -2,8 +2,6 @@ import datetime
 from dataclasses import dataclass, asdict
 from uuid import uuid4
 
-from bestagon.core.exceptions import EventTypeNotRegisteredError
-
 
 @dataclass(frozen=True)
 class DomainEvent:
@@ -11,21 +9,6 @@ class DomainEvent:
     Domain event represents an important change in a business domain that is meaningfull to business experts and stakeholders.
     Domain event leads to the change in aggregate state and at the same time triggers a reaction in other parts of the system.
     """
-
-    _EVENT_TYPE = None
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        cls._EVENT_TYPE = None
-
-    @property
-    def event_type(self) -> str:
-        if not self._EVENT_TYPE:
-            raise EventTypeNotRegisteredError(
-                f'Failed to retrieve event type for event {self.__class__.__qualname__}: event type is not registered, '
-                f'use `@register_event_type(event_type: str)` decorator on event class to register event type.'
-            )
-        return self._EVENT_TYPE
 
     def to_dict(self) -> dict:
         return asdict(self)
