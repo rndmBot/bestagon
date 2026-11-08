@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.0] - 2026-11
 ### Added
 ### Changed
+- `AggregateTypeRegistry` and `EventTypeRegistry` interface changed. Both registries now expose methods to register canonic and legacy
+  types. Canonic types are types that will be used for all new events and there can be only one canonic type registered for each aggregate and event class.
+  Legacy types are type that used earlier, but have been replaced for some reasons. There can be multiple legacy type registered for each aggregate or
+  event type.
 
 
 ## [0.9.0] - 2026-09

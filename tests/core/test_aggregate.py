@@ -4,7 +4,7 @@ from typing import Callable, Dict, Type
 import pytest
 
 from bestagon.core.aggregate import Aggregate, PendingEvent
-from bestagon.core.exceptions import EventHandlerNotRegisteredError
+from bestagon.core.exceptions import EventHandlerNotRegisteredError, IntegrityError
 from bestagon.core.message import DomainEvent, DomainEventMetadata, DomainMessage
 from bestagon.core.registry import register_aggregate_type, register_event_type
 
@@ -287,12 +287,12 @@ class TestEventOwnership:
     """
 
     def test_a_subclass_cannot_silently_inherit_an_event(self):
-        with pytest.raises(TypeError, match='inherits event "Opened" from Counter'):
+        with pytest.raises(IntegrityError, match='inherits event "Opened" from Counter'):
             class SilentCounter(Counter):
                 pass
 
     def test_redefining_only_some_of_the_inherited_events_is_not_enough(self):
-        with pytest.raises(TypeError, match='inherits event "Incremented" from Counter'):
+        with pytest.raises(IntegrityError, match='inherits event "Incremented" from Counter'):
             class PartialCounter(Counter):
                 @dataclass(frozen=True)
                 class Opened(Aggregate.AggregateCreated):

@@ -3,27 +3,24 @@ Aggregate
 =========
 
 An aggregate is a central part of your domain model. It represents an entity or collection of entities that exists in your
-domain, for example ``Customer``, ``Merchant``, or ``Transaction``. Each aggregate is unique and cannot be substituted by another one and,
-most importantly, an aggregate serves as a source of domain events, which are persisted in the event store.
+domain, for example ``Customer``, ``Merchant``, or ``Transaction`` and so on. The aggregate fullfills two important functions:
+    1. It holds business rules that exist in your domain.
+    2. The aggregate is a source of domain events - when something important happens in your domain the changes are captured
+       as domain event and then persisted in event store.
 
-This tutorial will give you step-by-step instructions on how to write event-sourced aggregates using the Bestagon framework.
+This tutorial will give you step-by-step instructions how to write event-sourced aggregates using the Bestagon framework.
 
 .. note::
 
     There is also one commonly overlooked fact: there are no transactions in event-sourced systems like in database management systems.
-    This function is delegated to the aggregate, and exactly this component represents a transactional boundary in your system.
-
-.. note::
-
-    For brevity, the code snippets in this tutorial omit imports.
+    This function is delegated to the aggregate - it serves as a transactional boundary in your system.
 
 
 The Aggregate class
 -------------------
 
 In Bestagon, aggregates are represented by the :class:`~bestagon.core.aggregate.Aggregate` class, which has to be subclassed for each
-aggregate type you have in your domain model. This is an abstract class and it contains several abstract methods that
-should be implemented: ``create_id`` and ``get_event_handler_routing`` (both are covered later in the tutorial).
+aggregate type you have in your domain model.
 
 .. code-block:: python
 
@@ -35,10 +32,14 @@ should be implemented: ``create_id`` and ``get_event_handler_routing`` (both are
         pass
 
 
-Additionally, you need to register an aggregate type for each aggregate you have in your domain, which can be done
-using the ``@register_aggregate_type(aggregate_type)`` decorator. An aggregate type is a simple string, which should be unique
-for each aggregate in your domain model. The aggregate type is used by the framework internally for the serialization of events
-and allows you to decouple the actual class from its type.
+Please note the ``register_aggregate_type`` decorator. It specifies the type of the aggregate that will be persisted in
+event store when you save it using repository. Such approach allows you to decouple the stored aggregate class from the actual
+Python's class that implements it.
+
+.. warning::
+
+    The use of ``register_aggregate_type`` decorator is **mandatory**. You will not be able to persist new events in event
+    store without registering aggregate type.
 
 
 Domain events
@@ -46,21 +47,25 @@ Domain events
 
 Domain events are one of the most important parts of the aggregate. They tell what has happened in your domain that can
 be interesting for the business people, and they are usually discovered using workshops like event storming or event modeling.
-When you define domain events, it is good practice to add them to the body of the aggregate. This helps to keep things
-in order, especially when you have a rich domain model with many aggregates and events.
+The events are bound to the specific aggregate, you can think of it as Aggregate owns the events, so you define your domain events
+inside the aggregate class.
 
 There are two types of domain events: ``Aggregate.AggregateCreated`` and ``Aggregate.AggregateEvent``. They are both frozen dataclasses and
 should contain only Python primitives like ``str``, ``int``, ``float``, ``bool`` etc., so that they can be easily serialized.
 
-``Aggregate.AggregateCreated`` is a special type of event from which an aggregate starts its lifecycle.
+``Aggregate.AggregateCreated`` is a special type of event that indicates the start of a lifecycle of aggregate.
 Think about what is happening in your domain: which event tells you explicitly that a specific entity has been created?
 As an example, if a ``Customer`` starts its lifecycle after registering on a website, then there should be a ``Registered`` event
 inside the ``Customer`` aggregate. Please note that each aggregate must have exactly one ``AggregateCreated`` event.
 
+.. note::
+
+    Each aggregate must implement one and exactly one ``AggregateCreated`` event.
+
 After defining the ``AggregateCreated`` event, each subsequent event must subclass the ``Aggregate.AggregateEvent`` class.
 
-Similar to ``Aggregate``, each event type should be registered using the ``@register_event_type(event_type)`` decorator. The specified
-event type will be used by the framework internally during the event persistence step.
+Similar to ``Aggregate``, you need to register event types using the ``@register_event_type(event_type)`` decorator.
+These event types will be used during the persistence step and saved in the event store.
 
 .. code-block:: python
 
@@ -91,11 +96,13 @@ event type will be used by the framework internally during the event persistence
         class Matured(Aggregate.AggregateEvent):
             isin: str
 
-.. warning::
+.. note::
 
-    It is highly advisable not to change aggregate and event types after their definition. If, for some
-    reason, you need to rename them, then you need to manually register new types in addition to old ones using ``EventTypeRegistry``
-    and ``AggregateTypeRegistry``. More details about that can be found in the chapter about the persistence mechanism.
+    When you save events in event store, the provided event and aggregate types are persisted in event's metadata and
+    it is impossible to change them. If for some reason you decide to change event type after that moment then you
+    need to register legacy type using ``AggregateTypeRegistry's`` ``register_legacy_aggregate_type`` and /or
+    ``EventTypeRegistry's`` ``register_legacy_event_type`` methods. Otherwise you will not be able to retrieve you previously
+    saved aggregates.
 
 
 Aggregate initialization
@@ -103,14 +110,14 @@ Aggregate initialization
 
 When you have finished defining events, it is time to implement the ``__init__`` method for your aggregate. The method takes
 several parameters as input: an ``AggregateCreated`` event from which an aggregate starts its lifecycle, the ID of the aggregate
-and the initial version of the aggregate.
+and the initial version.
 
 The aggregate ID and version are used internally, and you need to pass these values to the superclass's constructor.
 
 The ``AggregateCreated`` event is used to set the initial state of the aggregate. This is what you need to do manually:
-you use the fields in the event to set the initial values of the properties in your aggregate. Here you define the properties
-of your aggregate that can be changed within the aggregate lifecycle. In the example below we use primitives as property types
-for simplicity, but it is highly advisable to use value objects, especially if these properties are part of your invariants.
+you use the fields in the event to set the initial values of the attributes of your aggregate.
+In the example below we use primitives as property types for simplicity, but it is highly advisable to use value objects,
+especially if these properties are part of your invariants.
 
 .. code-block:: python
 
@@ -120,7 +127,7 @@ for simplicity, but it is highly advisable to use value objects, especially if t
         def __init__(self, event: Issued, aggregate_id: str, aggregate_version: int):
             super().__init__(event=event, aggregate_id=aggregate_id, aggregate_version=aggregate_version)
 
-            # It is good practice to make attributes private to protect them from accidental change
+            # It is good practice to make attributes protected to mitigate a change of accidental change
             self._isin = event.isin
             self._issue_date = date.fromisoformat(event.issue_date)
             self._maturity_date = date.fromisoformat(event.maturity_date)
@@ -187,25 +194,28 @@ for simplicity, but it is highly advisable to use value objects, especially if t
 Aggregate ID
 ------------
 
-Another crucial part of the aggregate is its ID. It is a string that should be globally unique across your system.
+Another crucial part of the aggregate is ID. It is a string that should be globally unique across your system.
 Bestagon uses the aggregate ID to store and retrieve events from the event store, and each aggregate will have its own event
 stream named by the aggregate ID.
 
 To create the aggregate ID, you need to implement the abstract static method ``create_id``. It is good practice to use
-UUIDv5 for this purpose, but you can use any method you like as long as the value is globally unique:
+UUID5 for this purpose, but you can use any method you like as long as the value is globally unique:
 
 .. code-block:: python
 
-    @staticmethod
-    def create_id(isin: str) -> str:
-        aggregate_uid = uuid5(NAMESPACE_URL, f'/bond/{isin}')
-        return str(aggregate_uid)
+    @register_aggregate_type('bond')
+    class Bond(Aggregate):
+
+        @staticmethod
+        def create_id(isin: str) -> str:
+            aggregate_uid = uuid5(NAMESPACE_URL, f'/bond/{isin}')
+            return str(aggregate_uid)
 
 .. warning::
 
     After defining the ``create_id`` method, be very careful when changing it.
     If your changes lead to the creation of a different aggregate ID with the same parameters, then you
-    will not be able to reconstruct your previously saved aggregate from the event store.
+    will not be able to reconstruct your previously saved aggregates from the event store.
 
 
 Aggregate factory
@@ -233,8 +243,6 @@ named ``issue``. The factory method consists of several steps:
 
     @register_aggregate_type('bond')
     class Bond(Aggregate):
-
-        # Code omitted
 
         @classmethod
         def issue(
@@ -277,7 +285,7 @@ Implementing business logic
 ---------------------------
 
 The next step is to implement methods that actually execute business logic and lead to the creation of domain events
-and changes of state of the aggregate. Before we begin, there are two types of methods to distinguish between: command handlers
+and change of the aggregate's state. Before we begin, there are two types of methods to distinguish between: command handlers
 and event handlers.
 
 The command handlers are methods where business logic lives:
@@ -385,5 +393,77 @@ with domain events as keys and event handlers as values:
 
 After that, the aggregate is complete and can be used in your applications.
 
-This concludes the aggregate tutorial. In the next step, you will learn how to implement
-use cases and how to react to events that are generated by your domain model.
+
+Aggregate and Event types registration
+--------------------------------------
+
+This section gives gives more understanding of aggregate and event types registration mechanism.
+
+When you define you arrgegate it is a necessary to register aggregate and event types using ``register_aggregate_type``
+and ``register_event_type`` decorators, this step is necessary if you want to be able to persist events in the event store
+when saving the aggregate.
+
+Aggregate and event types are simple strings. For the aggregate the string should be a name
+of the entity the aggregate represents, for example - if your aggregate represents a ``Customer``, then aggregate type should
+be 'customer'. For event type it is recommended to name it in a way so you can easily understand to which aggregate
+the event belongs and what it changes, for example - if your ``Customer`` aggregate has ``Registered`` event, then
+event tupe should be 'CutomerRegistered'.
+
+Why it is necessary? The main reason is to decouple events from their Python's implementation during persistense step.
+When stored, events must not contain any references to actual classes that implements them. This way you make your domain model
+more technology agnostic and you can easiy change names of the classes that implement events or, if necessary, migrate to
+another framework and/or another programming language.
+
+Under the hood for each event the Bestagon creates a ``DomainEventMetadata`` object, that contains
+all the information about the event including agregate and event types. This metadata object is stored along the event
+in event store and contains all the information to correlate this event with the parent aggregate. During the reconsturcion
+step the Bestagon looks up for the actual aggregate and events classes using stored aggregate and event types and uses them
+to instantiate the aggregate, events and mutates the aggregate state by applying the events one by one.
+
+So now you know that aggregate and event class names can be easily changed if needed, but what will happen if you change
+the aggregate or event type? First of all you should understand that it is impossible and simply not necessary to
+change the data, stored in the event store. All events in it will have the old event and aggregate type stored and
+to be able to reconstruct old aggregates you need to explicitly register legacy aggregate and / or event types
+using ``aggregate_type_registry.register_legacy_aggregate_type`` and ``event_type_registry.register_legacy_event_type``
+where you need to specify the old type that have been used for specific class.
+
+
+Inheritance
+-----------
+
+Inheritance is another important thing you need to keep in mind when creating your aggregate. As you already know
+aggregate represents a model of an entity in you domain. The entity has a set of events that are bounded to it,
+so the entity literally owns its events and each event has it's own type registered with it. Imagine a situation
+when you create aggregate that inherits from another already existing aggregate, for example ``Customer`` -> ``VIPCustomer``.
+In such case ``VIPCustomer`` inherits all the events and types registered for the ``Customer`` aggregate and it creates a
+dangerous situation when your events will hold a refrence to another aggregate during persistence step ('customer'
+instead of 'vip_customer') and, most likely, you will not be able to reconstruct you aggregate after that.
+
+To prevent this situation from happening Bestagon enforses you to reregister both aggregate and event types
+when you create aggregate that inherits from another. It means that you will need to use ``register_aggregate_type``
+decorator on your newly created aggregate, redefine all the events that exist in parent's aggregate and reregister their types.
+
+.. code-block:: python
+
+    @register_aggregate_type('customer')
+    class Customer(Aggregate):  # Parent class, inherits from `Agregate`
+
+        @register_event_type('CustomerRegistered')
+        @dataclass(frozen=True)
+        class Registered(Aggregate.AggregateCreated):  # Inherits from `Aggregate.AggregateCreated`
+            customer_id: str
+            registered_at: str
+
+
+    @register_aggregate_type('vip_customer')  # Reregister aggregate type for each child
+    class VIPCustomer(Customer):  # Inherits from `Customer`
+
+        @register_event_type('VIPCustomerRegistered')  # MUST reregister event type
+        @dataclass(frozen=True)
+        class Registered(Customer.Registered):  # Inherits from `Customer.Registered` instead of `Aggregate.AggregateCreated`
+            # customer_id and registered_at inherited from parent's class
+            tier: int  # Additional fields that are specific for the child class
+
+
+If you will not redefine events and reregister types, Bestagon will not allow yu to instantiate such class and
+raises an exception.

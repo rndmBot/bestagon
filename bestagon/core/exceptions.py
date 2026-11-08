@@ -58,6 +58,10 @@ class EventHandlerNotRegisteredError(BestagonError):
     pass
 
 
+class IntegrityError(BestagonError):
+    pass
+
+
 class LegacyAggregateTypeAlreadyRegisteredError(BestagonError):
     pass
 

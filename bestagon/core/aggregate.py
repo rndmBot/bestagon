@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Callable, Type
 
-from bestagon.core.exceptions import EventHandlerNotRegisteredError
+from bestagon.core.exceptions import EventHandlerNotRegisteredError, IntegrityError
 from bestagon.core.message import DomainEvent, DomainMessage
 
 
@@ -49,17 +49,13 @@ class Aggregate(ABC):
 
     def __init_subclass__(cls, **kwargs):
         """
-        # TODO - fix docstring, there is no event type now, but subclasses should redefine parent's events
         In your domain you can easily have aggregates that inherit from other aggregates, for example: Customer -> VIPCustomer.
-        Such inheritance creates a dangerous situation when child inherits parent's aggregate type and, if child
-        have not registered its own aggregate type using `register_aggregate_type` decorator, then parent's aggregate
-        type will be used on serialization step which can make deserialization and reconstruction not possible.
-        To protect aggregate from this the method resets _AGGREGATE_TYPE to None, it is executed before the decorator,
-        so child aggregates without decorator will have _AGGREGATE_TYPE == None and it will raise an exception
-        on serialization state instead of silently corrupting the data.
+        Such inheritance creates a dangerous situation when you create completely different entity that inherits
+        domain events that belongs to parent, in our example VIPCustomer inherits events that are bound to Customer aggregate
+        ignoring the fact that these are completely different entities and they should define it's own set of events.
+        To prevent such situation from happening Bestagon enforses you to redefine events and reregister their types inside the child class.
         """
         super().__init_subclass__(**kwargs)
-        # TODO - document - all events must be redefined and reregistered for each subclass
         for base in cls.__mro__[1:]:
             if base is Aggregate or not issubclass(base, Aggregate):
                 continue
@@ -69,8 +65,7 @@ class Aggregate(ABC):
                         and issubclass(attr, DomainEvent)
                         and name not in vars(cls)
                 ):
-                    # TODO - rewrite exception
-                    raise TypeError(
+                    raise IntegrityError(
                         f'{cls.__qualname__} inherits event "{name}" from {base.__qualname__}. '
                         f'Events are bound to the aggregate that defines them, '
                         f'redefine "{name}" in {cls.__qualname__}.'
@@ -112,16 +107,20 @@ class Aggregate(ABC):
         """
         When you need to create a new instance of the aggregate you do not instantiate it directly, instead you need to
         define a factory method on your aggregate class. This factory method should implement the following workflow:
-            1. Validate the input
-            2. Execute business logic if necessary
-            3. Create <AggregateCreated> event
-            4. Instantiate aggregate using `create_aggregate` method
-            5. Return newly created aggregate.
+
+        1. Validate the input
+        2. Execute business logic if necessary
+        3. Create ``<AggregateCreated>`` event
+        4. Instantiate aggregate using ``create_aggregate`` method
+        5. Return newly created aggregate.
 
         For example:
+
+        .. code-block:: python
+
             class Customer(Aggregate):
-                class Created(AgregateCreated):
-                    # Fields omited
+                class Created(AggregateCreated):
+                    # Fields omitted
                     ...
 
                 @classmethod
@@ -129,7 +128,7 @@ class Aggregate(ABC):
                     # Validate input
                     # Execute business logic if necessary
 
-                    event = cls.Created(cutomer_id=customer_id)
+                    event = cls.Created(customer_id=customer_id)
                     aggregate_id = cls.create_id(customer_id)
                     obj = cls.create_aggregate(
                         event=event,
@@ -138,6 +137,7 @@ class Aggregate(ABC):
                     )
                     return obj
         """
+
         if not isinstance(event, cls.AggregateCreated):
             raise TypeError(
                 f'Failed to create aggregate {cls.__qualname__}: '
@@ -183,6 +183,8 @@ class Aggregate(ABC):
         This class have to be reimplemented to provide the routing from event to the corresponding event handler,
         for example:
 
+        .. code-block:: python
+
             def event_handler_routing(self):
                 routing = {
                     self.NameChanged: self._when_name_changed,
@@ -190,7 +192,6 @@ class Aggregate(ABC):
                 }
                 return routing
         """
-        # TODO - document - solves the event inheritance problem
         raise NotImplementedError
 
     def mutate(self, message: DomainMessage) -> None:
