@@ -14,9 +14,9 @@ It is very difficult, and sometimes even impossible, to query such information f
 news is that you do not need to, because event-sourced systems provide a very powerful mechanism to turn these
 events into read models - a projection.
 
-Projection takes the stream of events and populates a read model by replaying events one by one. The read model can be
+A projection takes the stream of events and populates a read model by replaying events one by one. The read model can be
 in any form you can imagine - a table, graph, JSON file, and so on. It is populated in near
-real-time and can be easily dropped if not needed anymore, because the source of truth - events - are kept intact and can be
+real-time and can be easily dropped if not needed anymore, because the source of truth - events - is kept intact and can be
 used again to build a new projection.
 
 
@@ -162,7 +162,7 @@ Event handlers
 Now that we have our setters, the question is how we call them. You definitely should not call them manually;
 these methods should be called automatically as a reaction to the events that have happened in your domain model.
 
-To make it real, you need to let the projection know which events you want to react to and how they should be called. The
+To make it happen, you need to let the projection know which events you want to react to and how they should be called. The
 first step is to define event handlers. These are simple methods that take an instance of ``DomainMessage`` as an
 input parameter. Inside the handler, you extract the event and use the values from the event to call the necessary setter.
 
@@ -263,8 +263,8 @@ JSON file and converted to a table or any other visual representation:
 Dropping projection
 -------------------
 
-One of the very powerful features of projections is that they are disposable. You can easily drop it when you decide
-that the read model is not useful anymore or it contains mistakes that need to be fixed. To make it real you need to reimplement
+One of the very powerful features of projections is that they are disposable. You can easily drop them when you decide
+that the read model is not useful anymore or it contains mistakes that need to be fixed. To make it happen you need to reimplement
 the ``drop`` method for the projection. It should delete all the data from your database regarding this projection so it could be rebuilt
 by the framework.
 

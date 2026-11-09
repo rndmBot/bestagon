@@ -5,6 +5,7 @@ Overview
 This chapter will give you a necessary architectural and conceptual overview of the framework.
 
 The main components of the framework can be split into several categories:
+
     - Domain model
     - Application
     - Projection
@@ -92,8 +93,8 @@ The next important component is an event-sourced system. The Domain Model, Appli
 of your system. This core should be properly configured and hidden from the outside world.
 ``EventSourcedSystem`` is designed for this purpose and it fulfills two important functions:
 
-First of all the system serves as a glue that ties all the components together, it owns applications and projections,
-sets up subscriptions and also can implement additional automations that can be used in advanced workflows that require
+First of all, the system serves as glue that ties all the components together. It owns applications and projections,
+sets up subscriptions, and also can implement additional automations that can be used in advanced workflows that require
 both applications and projections.
 
 The second and most important function - the system serves as a boundary around your core and all the communication

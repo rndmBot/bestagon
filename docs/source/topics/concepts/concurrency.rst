@@ -6,7 +6,7 @@ communication happening with different storage under the hood:
 
 - repository communicates with the event store when it retrieves and saves aggregates
 - projections update and retrieve data from the reporting database
-- subscriptions constantly waiting for new events and propagating them to subscribers
+- subscriptions constantly wait for new events and propagate them to subscribers
 - checkpoints are updated every time the event is consumed
 - and so on
 

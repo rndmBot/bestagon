@@ -13,7 +13,7 @@ technical details.
 The Bestagon provides implementations of event stores out of the box:
 
 - ``KurrentDBEventStore`` - uses KurrentDB as underlying storage and is suitable for projects
-  where performance and scalability is crucial.
+  where performance and scalability are crucial.
 - ``AIOSQLiteEventStore`` - uses SQLite as underlying storage (``aiosqlite``)
   and it is a perfect choice for quick prototyping and simple projects.
 
@@ -30,12 +30,12 @@ append-only, immutable event log.
 Every time new events are added to the event store, they are appended to the end of the stream.
 This behavior is intentional. Once appended, events cannot be changed, and should stay in
 the event store as long as the system exists.
-There is no event retention mechanism like in event transport systems, for example Kafka.
+There is no event retention mechanism like in event transport systems, for example, Kafka.
 
 There are two types of streams in the event store:
 
 - The All stream. It contains all the events in the event store in chronological order.
-  You usually do not query this stream for specific events, instead you subscribe to ``all`` and react
+  You usually do not query this stream for specific events; instead, you subscribe to ``all`` and react
   to new events as they appear.
 
 - The second type of stream is an aggregate stream.
@@ -70,11 +70,11 @@ As an example, imagine a situation when two users modify the same aggregate.
 When they start to modify the aggregate, the stream version is 5 (for example) and it is equal to the last version of the saved aggregate.
 The first user finishes modifying the aggregate and saves the changes. As a result, 2 new events have been created in
 the aggregate and saved in the event store.
-At this moment event store receives two new events and 5 as an expected version (the version of the aggregate before
-the changes), it validates that the expected version is equal to the stream version and writes the events.
+At this moment, the event store receives two new events and 5 as the expected version (the version of the aggregate before
+the changes). It validates that the expected version is equal to the stream version and writes the events.
 Now the stream version is 7, because of the two new events and the aggregate also has a new version equal to 7.
 At the same time, the second user still works with the old version of the aggregate equal to 5.
-When the user tries to save the aggregate, the event store receives 5 as expected version and raises ``ExpectedVersionError``
+When the user tries to save the aggregate, the event store receives 5 as the expected version and raises ``ExpectedVersionError``
 because the current version of the stream is already 7, therefore rejecting the changes made by the second user.
 
 To check the current version of the stream, use the ``get_stream_version`` method, but it is not recommended to
@@ -85,7 +85,7 @@ Retrieving events
 -----------------
 
 To retrieve events, the event store provides the ``get_stream`` method.
-This method returns all the events for the stream provided by ``stream_name`` parameter as a tuple of ``EventStoreEvent`` instances.
+This method returns all the events for the stream provided by the ``stream_name`` parameter as a tuple of ``EventStoreEvent`` instances.
 Each event contains several fields:
 
 - ``stream_name`` - name of the stream the event belongs to.
@@ -125,7 +125,7 @@ The ``create_subscription`` method returns an instance of ``EventStoreSubscripti
 methods:
 
 - Consecutively call the ``next_event`` method when necessary.
-- Use it as async iterator:
+- Use it as an async iterator:
 
 .. code-block:: python
 

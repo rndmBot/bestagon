@@ -1,8 +1,8 @@
 Serving with FastAPI
 ====================
 
-When your system is ready, it can be easily used locally as is, for example to run in Jupyter Notebook or using a command line.
-But in most cases you want to be able to serve your system across the network so users and other systems could communicate with it.
+When your system is ready, it can be easily used locally as is, for example, to run it in a Jupyter Notebook or from the command line.
+But in most cases you want to be able to serve your system across the network so that users and other systems can communicate with it.
 One way to achieve this is by implementing a REST API, and in this tutorial you will see how you can do it using FastAPI.
 
 System configuration
@@ -26,7 +26,7 @@ connection to the Neo4j database and use it to initialize the system.
 FastAPI instance and system initialization
 ------------------------------------------
 
-Next, you need to define a FastAPI application. There is one tricky part here - our system is asynchronous, it should be
+Next, you need to define a FastAPI application. There is one tricky part here - our system is asynchronous: it should be
 initialized before usage and shut down gracefully when the work is finished. To make it happen, FastAPI provides a very
 convenient mechanism using the ``lifespan`` coroutine, and this is a perfect place where we can do the system initialization and shutdown.
 
@@ -90,7 +90,7 @@ commands and queries. In your endpoints you only need to do three things:
 3. Execute it and return the result.
 
 This allows us to keep endpoints as thin as possible and provides a clear separation of concerns - the system is responsible
-for the execution of business logic, and REST API is responsible for the communication with the outside world.
+for the execution of business logic, and the REST API is responsible for the communication with the outside world.
 
 .. code-block:: python
 
