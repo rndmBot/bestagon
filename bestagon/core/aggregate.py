@@ -21,6 +21,8 @@ class Aggregate(ABC):
     The base class for event-sourced aggregtes.
     """
 
+    # TODO - aggregate should also contain Deleted event
+
     INITIAL_VERSION = 0
 
     @dataclass(frozen=True)
@@ -81,6 +83,7 @@ class Aggregate(ABC):
 
     @property
     def original_version(self) -> int:
+        # TODO - rename it into original_aggregate_version
         return self._original_version
 
     @property
